@@ -1,0 +1,40 @@
+```gitignore
+# Configuración local del controller
+controller.env
+
+# Build
+build/
+cmake-build-*/
+
+# Ejecutables
+*.exe
+*.out
+
+# Archivos objeto
+*.o
+*.obj
+
+# Logs
+logs/
+*.log
+
+# Archivos temporales
+*.tmp
+*.swp
+
+# Configuración de IDE
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Artefactos generados por vcpkg
+vcpkg/buildtrees/
+vcpkg/downloads/
+vcpkg/installed*/
+vcpkg/vcpkg_installed*/
+vcpkg/packages/
+vcpkg/scripts/buildsystems/tmp/
+```
