@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.13)
+
 project(AutoScalingController CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(AWSSDK REQUIRED COMPONENTS monitoring autoscaling)
+find_package(AWSSDK REQUIRED COMPONENTS
+    monitoring
+    autoscaling
+    elasticloadbalancingv2
+)
 
 add_executable(controller
     src/main.cpp
@@ -14,5 +19,12 @@ add_executable(controller
     src/Logger.cpp
 )
 
-target_include_directories(controller PRIVATE include)
-target_link_libraries(controller PRIVATE ${AWSSDK_LINK_LIBRARIES})
+target_include_directories(controller PRIVATE
+    include
+)
+
+target_link_libraries(controller PRIVATE
+    AWS::aws-cpp-sdk-monitoring
+    AWS::aws-cpp-sdk-autoscaling
+    AWS::aws-cpp-sdk-elasticloadbalancingv2
+)
