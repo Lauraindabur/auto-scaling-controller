@@ -1,10 +1,10 @@
-```gitignore
 # Configuración local del controller
 controller.env
 
 # Build
 build/
 cmake-build-*/
+build-tests/
 
 # Ejecutables
 *.exe
@@ -40,4 +40,3 @@ vcpkg/installed*/
 vcpkg/vcpkg_installed*/
 vcpkg/packages/
 vcpkg/scripts/buildsystems/tmp/
-```

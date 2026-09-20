@@ -18,6 +18,10 @@ public:
         }
     }
 
+    int ciclosRestantes() const {
+        return ciclosRestantes_;
+    }
+
     OperationState estado() const {
         return estado_;
     }

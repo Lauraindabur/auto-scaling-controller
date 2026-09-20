@@ -7,7 +7,7 @@ using namespace std;
 
 class MovingAverage {
 public:
-    explicit MovingAverage(std::size_t ventana) : ventana_(ventana) {}
+    explicit MovingAverage(size_t ventana) : ventana_(ventana) {}
 
     void agregar(double valor) {
         buffer_.push_back(valor);
@@ -16,7 +16,7 @@ public:
         }
     }
 
-    void prellenar(const std::vector<double>& historicos) {
+    void prellenar(const vector<double>& historicos) {
         for (double v : historicos) {
             agregar(v);
         }
@@ -26,16 +26,16 @@ public:
         return buffer_.size() == ventana_;
     }
 
-    std::size_t muestrasActuales() const {
+    size_t muestrasActuales() const {
         return buffer_.size();
     }
 
     double valor() const {
-        double suma = std::accumulate(buffer_.begin(), buffer_.end(), 0.0);
+        double suma = accumulate(buffer_.begin(), buffer_.end(), 0.0);
         return suma / static_cast<double>(buffer_.size());
     }
 
 private:
-    std::deque<double> buffer_;
-    std::size_t ventana_;
+    deque<double> buffer_;
+    size_t ventana_;
 };
