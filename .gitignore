@@ -26,6 +26,9 @@ logs/
 .vscode/
 .idea/
 
+# carpetas
+tests/
+
 # Sistema operativo
 .DS_Store
 Thumbs.db
