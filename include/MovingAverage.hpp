@@ -1,13 +1,13 @@
 #pragma once
-#include <deque>
+#include <deque>  // una fila donde se mete or un lado y se saca por el otro
 #include <vector>
 #include <numeric>
 
 using namespace std;
 
 class MovingAverage {
-public:
-    explicit MovingAverage(size_t ventana) : ventana_(ventana) {}
+public:     //todo esto es usado desde main si es necesario
+    explicit MovingAverage(size_t ventana) : ventana_(ventana) {}  //constructor que recibe el tamaño de la ventana,copia ese valor en ventana_ se usa explicit apra evitar una conversion al tener el cosntructor un solo
 
     void agregar(double valor) {
         buffer_.push_back(valor);

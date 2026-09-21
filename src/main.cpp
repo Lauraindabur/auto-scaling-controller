@@ -32,7 +32,7 @@ int main() {
 
             while (true) {
                 engine.ejecutarCiclo();
-                std::this_thread::sleep_for(std::chrono::seconds(cfg.intervaloCicloSegundos));
+                std::this_thread::sleep_for(std::chrono::seconds(cfg.intervaloCicloSegundos)); //toma el valor de la variable de entorno, y pausa el programa por ese tiempo antes de vovler a ejecutar el ciclo 
             }
         }
     } catch (const std::exception& e) {
