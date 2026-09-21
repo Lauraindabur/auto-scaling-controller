@@ -19,6 +19,7 @@ struct Config {
     int timeoutOperacionCiclos;
     int capacidadMin;
     int capacidadMax;
+    int pasoMaximoSubida;
     int intervaloCicloSegundos;
 };
 
@@ -54,6 +55,7 @@ inline Config cargarConfigDesdeEntorno() {
     cfg.timeoutOperacionCiclos = stoi(detail::leerEnvObligatoria("TIMEOUT_OPERACION_CICLOS"));
     cfg.capacidadMin   = stoi(detail::leerEnvObligatoria("CAPACIDAD_MIN"));
     cfg.capacidadMax   = stoi(detail::leerEnvObligatoria("CAPACIDAD_MAX"));
+    cfg.pasoMaximoSubida = stoi(detail::leerEnvObligatoria("PASO_MAXIMO_SUBIDA"));
 
     cfg.intervaloCicloSegundos =
         stoi(detail::leerEnvObligatoria("INTERVALO_CICLO_SEGUNDOS"));

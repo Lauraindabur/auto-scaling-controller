@@ -8,7 +8,8 @@ public:
     virtual ~IActuator() = default;
 
     virtual int capacidadActual() = 0;
-    virtual bool ejecutar(const std::string& decision) = 0;
+    // paso: instancias a sumar en INCREASE_CAPACITY (REDUCE_CAPACITY siempre resta 1).
+    virtual bool ejecutar(const std::string& decision, int paso) = 0;
     virtual bool instanciasRestantesSanas() = 0;
     virtual bool operacionTermino() = 0;
 };

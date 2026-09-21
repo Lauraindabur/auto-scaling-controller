@@ -27,12 +27,12 @@ int ASGActuator::capacidadActual() {
     return outcome.GetResult().GetAutoScalingGroups()[0].GetDesiredCapacity();
 }
 
-bool ASGActuator::ejecutar(const std::string& decision) {
+bool ASGActuator::ejecutar(const std::string& decision, int paso) {
     int actual = capacidadActual();
     if (actual < 0) return false;
 
     int nueva = actual;
-    if (decision == "INCREASE_CAPACITY") nueva = actual + 1;
+    if (decision == "INCREASE_CAPACITY") nueva = actual + paso;
     else if (decision == "REDUCE_CAPACITY") nueva = actual - 1;
 
     if (nueva > capacidadMax_) nueva = capacidadMax_;

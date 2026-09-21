@@ -10,7 +10,7 @@ public:
                 std::string targetGroupArn, int capacidadMin, int capacidadMax);
 
     int capacidadActual() override;
-    bool ejecutar(const std::string& decision) override;
+    bool ejecutar(const std::string& decision, int paso) override;
     bool instanciasRestantesSanas() override;
     bool operacionTermino() override;
 

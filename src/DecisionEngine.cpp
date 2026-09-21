@@ -1,5 +1,7 @@
 #include "DecisionEngine.hpp"
 #include "Logger.hpp"
+#include <algorithm>
+#include <cmath>
 
 static const char* nombreEstado(OperationState e) {
     switch (e) {
@@ -84,6 +86,7 @@ void DecisionEngine::ejecutarCiclo() {
     }
     reg.capacidadActual = capacidad;
     std::string decision, justificacion;
+    int paso = 1;   // instancias a sumar si se decide subir
 
     bool subidaCpu = maCpu > cfg_.umbralSubida;
     bool subidaRt = maRt > cfg_.umbralRtSubida;
@@ -106,7 +109,18 @@ void DecisionEngine::ejecutarCiclo() {
         if (capacidad >= cfg_.capacidadMax) {
             decision = "MAINTAIN_CAPACITY"; justificacion = "límite máximo alcanzado (" + motivo + ")";
         } else {
-            decision = "INCREASE_CAPACITY"; justificacion = motivo;
+            decision = "INCREASE_CAPACITY";
+            if (subidaRt) {
+                // Subida proporcional: N_necesarias = techo(N_actual * MA_RT / umbral_RT).
+                // Si solo disparo la CPU no hay modelo medido, y el paso se queda en +1.
+                int necesarias = static_cast<int>(std::ceil(capacidad * maRt / cfg_.umbralRtSubida));
+                necesarias = std::min(necesarias, cfg_.capacidadMax);   // tope 1: capacidad maxima
+                paso = necesarias - capacidad;
+                paso = std::min(paso, cfg_.pasoMaximoSubida);           // tope 2: paso maximo
+                paso = std::max(paso, 1);                               // nunca menos de +1
+            }
+            justificacion = motivo + "; capacidad objetivo " + std::to_string(capacidad + paso)
+                            + ", paso +" + std::to_string(paso);
         }
     } else if (bajadaCpu && bajadaRt) {
         // BAJAR: conservador, exige CPU baja Y tiempo de respuesta bajo.
@@ -127,8 +141,9 @@ void DecisionEngine::ejecutarCiclo() {
     }
 
     if (decision != "MAINTAIN_CAPACITY") {
-        reg.accionSolicitada = decision;
-        bool exito = actuator_.ejecutar(decision);
+        int objetivo = decision == "INCREASE_CAPACITY" ? capacidad + paso : capacidad - 1;
+        reg.accionSolicitada = decision + " -> " + std::to_string(objetivo);
+        bool exito = actuator_.ejecutar(decision, paso);
         if (exito) { cooldown_.marcarEnProgreso(); ciclosEnProgreso_ = 0; reg.resultadoAccion = "IN_PROGRESS"; }
         else { cooldown_.marcarFallida(); reg.resultadoAccion = "FAILED"; }
     }
