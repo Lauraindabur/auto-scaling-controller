@@ -23,8 +23,4 @@ target_include_directories(controller PRIVATE
     include
 )
 
-target_link_libraries(controller PRIVATE
-    AWS::aws-cpp-sdk-monitoring
-    AWS::aws-cpp-sdk-autoscaling
-    AWS::aws-cpp-sdk-elasticloadbalancingv2
-)
+target_link_libraries(controller PRIVATE ${AWSSDK_LINK_LIBRARIES})

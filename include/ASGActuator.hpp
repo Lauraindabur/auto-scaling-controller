@@ -1,17 +1,18 @@
 #pragma once
 #include <string>
+#include "IActuator.hpp"
 #include <aws/autoscaling/AutoScalingClient.h>
 #include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
 
-class ASGActuator {
+class ASGActuator : public IActuator {
 public:
     ASGActuator(std::string asgName, const std::string& region,
                 std::string targetGroupArn, int capacidadMin, int capacidadMax);
 
-    int capacidadActual();
-    bool ejecutar(const std::string& decision);
-    bool instanciasRestantesSanas();
-    bool operacionTermino();
+    int capacidadActual() override;
+    bool ejecutar(const std::string& decision) override;
+    bool instanciasRestantesSanas() override;
+    bool operacionTermino() override;
 
 private:
     std::string asgName_;

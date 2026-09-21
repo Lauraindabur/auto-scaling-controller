@@ -2,36 +2,28 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include "IMetricSource.hpp"
 #include <aws/monitoring/CloudWatchClient.h>
 #include <aws/monitoring/model/GetMetricStatisticsRequest.h>
 
-class MetricSource {
+using namespace std;
+
+class MetricSource : public IMetricSource {
 public:
-    MetricSource(std::string asgName, std::string loadBalancerArn,
-                 std::string targetGroupArn, const std::string& region);
+    MetricSource(string asgName, string loadBalancerArn,
+                 string targetGroupArn, const string& region);
 
-    struct Lectura {
-        bool exito;
-        double valor;
-    };
-
-    struct MetricasSecundarias {
-        bool exito;
-        double targetResponseTime;
-        double requestCountPerTarget;
-    };
-
-    Lectura obtenerActual();
-    std::vector<double> obtenerHistorialInicial(std::size_t maxPuntos);
-    MetricasSecundarias obtenerMetricasSecundarias();
+    Lectura obtenerActual() override;
+    vector<double> obtenerHistorialInicial(size_t maxPuntos);
+    MetricasSecundarias obtenerMetricasSecundarias() override;
 
 private:
     Aws::CloudWatch::Model::GetMetricStatisticsRequest construirRequestCPU(
-        std::chrono::minutes atras);
-    static std::string extraerDimensionValue(const std::string& arn, const std::string& prefijo);
+        chrono::minutes atras);
+    static string extraerDimensionValue(const string& arn, const string& prefijo);
 
-    std::string asgName_;
-    std::string lbDimensionValue_;
-    std::string tgDimensionValue_;
+    string asgName_;
+    string lbDimensionValue_;
+    string tgDimensionValue_;
     Aws::CloudWatch::CloudWatchClient client_;
 };
