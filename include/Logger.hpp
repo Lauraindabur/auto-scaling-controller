@@ -6,16 +6,18 @@
 // Una linea del log de decisiones. Los campos opcionales salen como null en el JSON
 // cuando no aplican (p. ej. metrica no disponible).
 struct RegistroCiclo {
-    std::optional<double> rawMetric;
-    std::optional<double> movingAverage;
+    std::optional<double> cpuUtilization;
+    std::optional<double> movingAverageCpu;
+    std::optional<double> targetResponseTime;
+    std::optional<double> movingAverageResponseTime;
     std::optional<int> capacidadActual;
     std::string decision;
+    std::string decisionTrigger = "NONE";   // CPU | RT | CPU+RT | NONE
     std::string justificacion;
     std::string accionSolicitada = "NONE";
     std::string resultadoAccion = "N/A";
     std::string estadoOperacion = "NONE";
     int cooldownRestante = 0;
-    std::optional<double> targetResponseTime;
     std::optional<double> requestCountPerTarget;
 };
 

@@ -2,23 +2,28 @@
 #include <string>
 #include <vector>
 #include <chrono>
-#include "IMetricSource.hpp"
 #include <aws/monitoring/CloudWatchClient.h>
 #include <aws/monitoring/model/GetMetricStatisticsRequest.h>
+#include "IMetricSource.hpp"
 
 using namespace std;
 
 class MetricSource : public IMetricSource {
 public:
+    // Lanza runtime_error si los ARN no permiten derivar las dimensiones del ALB / Target Group.
     MetricSource(string asgName, string loadBalancerArn,
                  string targetGroupArn, const string& region);
 
     Lectura obtenerActual() override;
     vector<double> obtenerHistorialInicial(size_t maxPuntos);
+    vector<double> obtenerHistorialInicialRT(size_t maxPuntos);
     MetricasSecundarias obtenerMetricasSecundarias() override;
 
 private:
     Aws::CloudWatch::Model::GetMetricStatisticsRequest construirRequestCPU(
+        chrono::minutes atras);
+    Aws::CloudWatch::Model::GetMetricStatisticsRequest construirRequestELB(
+        const string& metrica, Aws::CloudWatch::Model::Statistic estadistico,
         chrono::minutes atras);
     static string extraerDimensionValue(const string& arn, const string& prefijo);
 

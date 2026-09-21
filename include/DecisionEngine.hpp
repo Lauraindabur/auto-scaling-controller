@@ -9,9 +9,10 @@ class Logger;
 
 class DecisionEngine {
 public:
-    DecisionEngine(const Config& cfg, IMetricSource& metrics, MovingAverage& ma,
+    DecisionEngine(const Config& cfg, IMetricSource& metrics,
+                   MovingAverage& maCpu, MovingAverage& maRt,
                    CooldownManager& cooldown, IActuator& actuator, Logger& logger)
-        : cfg_(cfg), metrics_(metrics), ma_(ma),
+        : cfg_(cfg), metrics_(metrics), maCpu_(maCpu), maRt_(maRt),
           cooldown_(cooldown), actuator_(actuator), logger_(logger) {}
 
     void ejecutarCiclo();
@@ -19,7 +20,8 @@ public:
 private:
     const Config& cfg_;
     IMetricSource& metrics_;
-    MovingAverage& ma_;
+    MovingAverage& maCpu_;
+    MovingAverage& maRt_;
     CooldownManager& cooldown_;
     IActuator& actuator_;
     Logger& logger_;

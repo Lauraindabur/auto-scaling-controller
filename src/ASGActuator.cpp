@@ -52,6 +52,7 @@ bool ASGActuator::instanciasRestantesSanas() {
     auto outcome = elbClient_.DescribeTargetHealth(req);
 
     if (!outcome.IsSuccess()) return false;
+    if (outcome.GetResult().GetTargetHealthDescriptions().empty()) return false;
 
     for (auto& desc : outcome.GetResult().GetTargetHealthDescriptions()) {
         if (desc.GetTargetHealth().GetState() !=
@@ -71,12 +72,16 @@ bool ASGActuator::operacionTermino() {
     auto outcome = elbClient_.DescribeTargetHealth(req);
     if (!outcome.IsSuccess()) return false;
 
+    // Terminada = ni mas ni menos targets que la capacidad deseada (sin instancias
+    // en draining/initial/terminando) y todos Healthy.
+    int total = 0;
     int sanas = 0;
     for (auto& desc : outcome.GetResult().GetTargetHealthDescriptions()) {
+        total++;
         if (desc.GetTargetHealth().GetState() ==
             Aws::ElasticLoadBalancingv2::Model::TargetHealthStateEnum::healthy) {
             sanas++;
         }
     }
-    return sanas == deseada;
+    return total == deseada && sanas == deseada;
 }

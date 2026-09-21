@@ -12,6 +12,8 @@ struct Config {
     string loadBalancerArn;
     double umbralSubida;
     double umbralBajada;
+    double umbralRtSubida;   // segundos
+    double umbralRtBajada;   // segundos
     size_t ventanaMA;
     int cooldownCiclos;
     int capacidadMin;
@@ -41,6 +43,8 @@ inline Config cargarConfigDesdeEntorno() {
 
     cfg.umbralSubida = stod(detail::leerEnvObligatoria("UMBRAL_SUBIDA"));
     cfg.umbralBajada = stod(detail::leerEnvObligatoria("UMBRAL_BAJADA"));
+    cfg.umbralRtSubida = stod(detail::leerEnvObligatoria("UMBRAL_RT_SUBIDA"));
+    cfg.umbralRtBajada = stod(detail::leerEnvObligatoria("UMBRAL_RT_BAJADA"));
 
     cfg.ventanaMA = static_cast<size_t>(
         stoul(detail::leerEnvObligatoria("VENTANA_MA")));
