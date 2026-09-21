@@ -25,4 +25,5 @@ private:
     CooldownManager& cooldown_;
     IActuator& actuator_;
     Logger& logger_;
+    int ciclosEnProgreso_ = 0;   // ciclos que lleva la operacion actual sin confirmarse
 };

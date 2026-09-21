@@ -16,6 +16,7 @@ struct Config {
     double umbralRtBajada;   // segundos
     size_t ventanaMA;
     int cooldownCiclos;
+    int timeoutOperacionCiclos;
     int capacidadMin;
     int capacidadMax;
     int intervaloCicloSegundos;
@@ -50,6 +51,7 @@ inline Config cargarConfigDesdeEntorno() {
         stoul(detail::leerEnvObligatoria("VENTANA_MA")));
 
     cfg.cooldownCiclos = stoi(detail::leerEnvObligatoria("COOLDOWN_CICLOS"));
+    cfg.timeoutOperacionCiclos = stoi(detail::leerEnvObligatoria("TIMEOUT_OPERACION_CICLOS"));
     cfg.capacidadMin   = stoi(detail::leerEnvObligatoria("CAPACIDAD_MIN"));
     cfg.capacidadMax   = stoi(detail::leerEnvObligatoria("CAPACIDAD_MAX"));
 

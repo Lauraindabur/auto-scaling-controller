@@ -39,6 +39,13 @@ public:
         estado_ = OperationState::NONE;
     }
 
+    // Timeout: la operacion se da por fallida, pero el estado real es incierto,
+    // asi que (a diferencia de marcarFallida) si arranca el cooldown.
+    void marcarTimeout() {
+        estado_ = OperationState::NONE;
+        ciclosRestantes_ = ciclosCooldown_;
+    }
+
 private:
     int ciclosCooldown_;
     int ciclosRestantes_ = 0;

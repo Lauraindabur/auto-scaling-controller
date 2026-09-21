@@ -13,10 +13,11 @@ static const char* nombreEstado(OperationState e) {
 
 void DecisionEngine::ejecutarCiclo() {
     RegistroCiclo reg;
+    bool operacionFallo = false;   // true solo en el ciclo en que se declara el timeout
     auto registrar = [&](const std::string& decision, const std::string& justificacion) {
         reg.decision = decision;
         reg.justificacion = justificacion;
-        reg.estadoOperacion = nombreEstado(cooldown_.estado());
+        reg.estadoOperacion = operacionFallo ? "FAILED" : nombreEstado(cooldown_.estado());
         reg.cooldownRestante = cooldown_.ciclosRestantes();
         logger_.registrar(reg);
     };
@@ -51,11 +52,19 @@ void DecisionEngine::ejecutarCiclo() {
     reg.movingAverageResponseTime = maRt;
 
     if (cooldown_.estado() == OperationState::IN_PROGRESS) {
+        ciclosEnProgreso_++;
         if (actuator_.operacionTermino()) {
             // Confirmada: el cooldown arranca ahora y este ciclo no cuenta como parte de él.
             cooldown_.marcarExitosa();
             reg.resultadoAccion = "SUCCESSFUL";
             registrar("MAINTAIN_CAPACITY", "operación confirmada, inicia cooldown");
+        } else if (ciclosEnProgreso_ > cfg_.timeoutOperacionCiclos) {
+            // Timeout: no se deshace nada. Se da por fallida y se espera el cooldown normal.
+            cooldown_.marcarTimeout();
+            operacionFallo = true;
+            reg.resultadoAccion = "FAILED";
+            registrar("MAINTAIN_CAPACITY", "operación excedió el tiempo máximo ("
+                      + std::to_string(cfg_.timeoutOperacionCiclos) + " ciclos), se marca como fallida");
         } else {
             registrar("MAINTAIN_CAPACITY", "operación en curso");
         }
@@ -120,7 +129,7 @@ void DecisionEngine::ejecutarCiclo() {
     if (decision != "MAINTAIN_CAPACITY") {
         reg.accionSolicitada = decision;
         bool exito = actuator_.ejecutar(decision);
-        if (exito) { cooldown_.marcarEnProgreso(); reg.resultadoAccion = "IN_PROGRESS"; }
+        if (exito) { cooldown_.marcarEnProgreso(); ciclosEnProgreso_ = 0; reg.resultadoAccion = "IN_PROGRESS"; }
         else { cooldown_.marcarFallida(); reg.resultadoAccion = "FAILED"; }
     }
 
