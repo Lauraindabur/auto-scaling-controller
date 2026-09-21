@@ -40,3 +40,9 @@ vcpkg/installed*/
 vcpkg/vcpkg_installed*/
 vcpkg/packages/
 vcpkg/scripts/buildsystems/tmp/
+
+# Resultados de pruebas de carga
+results/
+
+*.pem
+load-test.sh
