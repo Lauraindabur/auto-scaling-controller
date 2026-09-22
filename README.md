@@ -28,6 +28,7 @@ Los umbrales son estrictos: con `MA_RT` exactamente en 1.0 no se sube ni se baja
 Capacidad mínima 1 y máxima 5. Si ya está en el máximo, la decisión es `MAINTAIN_CAPACITY`
 con la justificación "límite máximo alcanzado" (y análogo en el mínimo).
 
+<!--
 ### Paso de subida proporcional
 
 Se basa en un modelo medido: el tiempo de respuesta se reparte entre las instancias,
@@ -256,3 +257,4 @@ CMakeLists.txt        Build principal (usa el AWS SDK vía vcpkg)
 ```
 
 ---
+-->
