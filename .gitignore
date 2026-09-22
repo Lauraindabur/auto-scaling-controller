@@ -26,8 +26,10 @@ logs/
 .vscode/
 .idea/
 
+
 # carpetas
 tests/
+estudio/
 
 # Sistema operativo
 .DS_Store
@@ -46,3 +48,5 @@ results/
 
 *.pem
 load-test.sh
+
+README.md

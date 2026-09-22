@@ -1,30 +1,32 @@
 #pragma once
 #include <string>
-#include <cstdlib>
-#include <stdexcept>
+#include <cstdlib> // para poder leer una variable de entorno
+#include <stdexcept> //trae runtime_error como ripo de error que se lanza
 
 using namespace std;
 
 struct Config {
-    string asgName;
+    string asgName;  
     string region;
-    string targetGroupArn;
+    string targetGroupArn; //identificador del target group
     string loadBalancerArn;
-    double umbralSubida;
+    double umbralSubida;   //umbrales de la CPU en %
     double umbralBajada;
-    double umbralRtSubida;   // segundos
+    double umbralRtSubida;   // Umbrales del TimeResponse en segs
     double umbralRtBajada;   // segundos
     size_t ventanaMA;
     int cooldownCiclos;
-    int timeoutOperacionCiclos;
+    int timeoutOperacionCiclos;  //ciclos maximos que una operación esta en curso atnes de timeout -> 6
     int capacidadMin;
     int capacidadMax;
-    int pasoMaximoSubida;
+    int pasoMaximoSubida; // maximo de isnntancias que se suman en un ciclo de subida -> 2
     int intervaloCicloSegundos;
 };
 
-namespace detail {
+//inline me aydua a definir una funcion dentro de un .hpp que varios archivos le hacen el include 
+namespace detail {   
 
+    // tomamos el valor de la varibale de entorno como un puntero al texto, y la retornamos como string
     inline string leerEnvObligatoria(const char* nombre) {
         const char* valor = getenv(nombre);
         if (valor == nullptr) {
@@ -37,7 +39,7 @@ namespace detail {
         return string(valor);
     }
 
-    // Convierte el texto completo; "abc" o "70x" dan un error que dice cuál variable está mal.
+    // Leer una variable y convertir a double
     inline double leerDouble(const char* nombre) {
         string texto = leerEnvObligatoria(nombre);
         try {
@@ -88,7 +90,8 @@ inline void validarConfig(const Config& cfg) {
         throw runtime_error("Configuración inválida: INTERVALO_CICLO_SEGUNDOS debe ser >= 1");
     }
 }
-
+// funcion principal para suar en main, devuelve un config completo cfg ya validado
+// usamos size_t apra convertirlo en entero sin signo cos static_cast que lo convierte primero a double
 inline Config cargarConfigDesdeEntorno() {
     Config cfg;
     cfg.asgName         = detail::leerEnvObligatoria("ASG_NAME");

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+// funcion que me ayuda a que se converta de enum a texto para ponerlo en los logs
 static const char* nombreEstado(OperationState e) {
     switch (e) {
         case OperationState::NONE:        return "NONE";
@@ -12,21 +13,23 @@ static const char* nombreEstado(OperationState e) {
     }
     return "NONE";
 }
-
+// Se crea RegistroCiclo del logger para ir acumulando datos y a final que se escriba como una linea del log
 void DecisionEngine::ejecutarCiclo() {
     RegistroCiclo reg;
-    bool operacionFallo = false;   // true solo en el ciclo en que se declara el timeout
+    bool operacionFallo = false;   // solo valdría true en el ciclo en que se declara el timeout
+
+    // Primero guardar el registro con su decision, motivo
     auto registrar = [&](const std::string& decision, const std::string& justificacion) {
         reg.decision = decision;
         reg.justificacion = justificacion;
-        reg.estadoOperacion = operacionFallo ? "FAILED" : nombreEstado(cooldown_.estado());
+        reg.estadoOperacion = operacionFallo ? "FAILED" : nombreEstado(cooldown_.estado());  //Si operacionFallo es true poner FAILED : estado real
         reg.cooldownRestante = cooldown_.ciclosRestantes();
         logger_.registrar(reg);
     };
 
-    // Las dos metricas se muestrean juntas en todos los ciclos. Si falla cualquiera,
-    // el ciclo entero es fallo y no se toca ningun buffer.
+    // Las dos metricas se muestran juntas en todos los ciclos. Si falla cualquiera,el ciclo entero es fallo y no se toca ningun buffer.
     auto lectura = metrics_.obtenerActual();
+    // Si lecutra no fue extiosa, entones se escribe la decision,motivo
     if (!lectura.exito) {
         std::string motivo = !lectura.cpuOk && !lectura.rtOk
                                  ? "CPUUtilization y TargetResponseTime no disponibles"
@@ -35,11 +38,13 @@ void DecisionEngine::ejecutarCiclo() {
         registrar("MAINTAIN_CAPACITY", motivo + " tras agotar reintentos");
         return;
     }
+    // Si se llega a esta aprte es porque la lectura fue exito, y se guarda en registro
     reg.cpuUtilization = lectura.cpu;
     reg.targetResponseTime = lectura.responseTime;
-
+    //Ahora se grega la elctua el MA de cada una
     maCpu_.agregar(lectura.cpu);
     maRt_.agregar(lectura.responseTime);
+    // Si alguna de las 2 no tiene todaia als 3 muestras lo gaurda con deicision, motivo
     if (!maCpu_.tieneSuficienteHistorial() || !maRt_.tieneSuficienteHistorial()) {
         std::string faltan = !maCpu_.tieneSuficienteHistorial() && !maRt_.tieneSuficienteHistorial()
                                  ? "MA_CPU y MA_RT"
@@ -48,11 +53,14 @@ void DecisionEngine::ejecutarCiclo() {
         return;
     }
 
+    // Se asume que ya tiene 3 cada una -> maCpu es para calucalr los promedios en las variables lcoales -> ps maCpu es objeto de la caske 
     double maCpu = maCpu_.valor();
     double maRt = maRt_.valor();
+    // Se guardaan en el archivo del log
     reg.movingAverageCpu = maCpu;
     reg.movingAverageResponseTime = maRt;
 
+    // Se compara si hay alguna operacion de escalado en curso
     if (cooldown_.estado() == OperationState::IN_PROGRESS) {
         ciclosEnProgreso_++;
         if (actuator_.operacionTermino()) {

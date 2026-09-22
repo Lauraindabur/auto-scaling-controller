@@ -4,7 +4,9 @@
 #include "Config.hpp"
 #include "IMetricSource.hpp"
 #include "IActuator.hpp"
+// Se define que recibe al crearse y que guarda
 
+//Se pone class no como invclude para no traer solo su contenido, pues aca solo se usa  por referencia de los objetos del main.cpp
 class Logger;
 
 class DecisionEngine {
@@ -25,5 +27,5 @@ private:
     CooldownManager& cooldown_;
     IActuator& actuator_;
     Logger& logger_;
-    int ciclosEnProgreso_ = 0;   // ciclos que lleva la operacion actual sin confirmarse
+    int ciclosEnProgreso_ = 0;   // ciclos que lleva el tick actual sin confirmarse
 };
