@@ -30,6 +30,12 @@ public:     //todo esto es usado desde main si es necesario
         return buffer_.size();
     }
 
+    // Contenido de la ventana, de la muestra mas vieja a la mas nueva. Es lo que el
+    // StateStore persiste para que un reinicio no tenga que volver a llenar la ventana.
+    vector<double> valores() const {
+        return vector<double>(buffer_.begin(), buffer_.end());
+    }
+
     double valor() const {
         double suma = accumulate(buffer_.begin(), buffer_.end(), 0.0);
         return suma / static_cast<double>(buffer_.size());

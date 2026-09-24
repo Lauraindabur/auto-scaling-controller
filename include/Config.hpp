@@ -45,16 +45,6 @@ struct Config {
     // --- Rutas de salida ---
     string stateFile;
     string logFile;
-
-    // --- Heredados del controller reactivo CPU+RT. Se borran en el Paso 5, junto con
-    //     el DecisionEngine y el MetricSource que los usan. ---
-    string loadBalancerArn;
-    string targetGroupArn;
-    double umbralRtSubida;
-    double umbralRtBajada;
-    int    cooldownCiclos;
-    int    timeoutOperacionCiclos;
-    int    pasoMaximoSubida;
 };
 
 //inline me ayuda a definir una funcion dentro de un .hpp que varios archivos le hacen el include
@@ -194,6 +184,19 @@ inline void validarConfig(const Config& cfg) {
                             "nace vencido (recibido " + to_string(cfg.maxDataAgeSeg) + " y "
                             + to_string(cfg.periodoSeg) + ")");
     }
+
+    // COOLDOWN_BAJADA_SEG debe cubrir el tiempo que tarda la señal reactiva en reflejar
+    // el efecto de la ultima bajada: 3 periodos para que la MA deje de arrastrar CPU
+    // previa a la reduccion, mas 1 periodo de margen por el retraso de publicacion de
+    // CloudWatch. Sin este piso, el controller podria bajar de nuevo con una MA que
+    // todavia esta midiendo la capacidad de ANTES del ultimo recorte.
+    const int minimoCooldownBajada = (static_cast<int>(cfg.maVentana) + 1) * cfg.periodoSeg;
+    if (cfg.cooldownBajadaSeg < minimoCooldownBajada) {
+        throw runtime_error("Configuración inválida: se requiere COOLDOWN_BAJADA_SEG >= (MA_VENTANA + 1) x "
+                            "PERIOD_SEG = " + to_string(minimoCooldownBajada) + " s, para que la MA de CPU "
+                            "no siga reflejando la capacidad de antes de la ultima bajada (recibido "
+                            + to_string(cfg.cooldownBajadaSeg) + " s)");
+    }
 }
 
 // funcion principal para usar en main, devuelve un config completo cfg ya validado
@@ -224,23 +227,15 @@ inline Config cargarConfigDesdeEntorno() {
     cfg.cRpm              = detail::leerDouble("C_RPM", 480.0);
 
     cfg.cooldownSubidaSeg = detail::leerEntero("COOLDOWN_SUBIDA_SEG", 120);
-    cfg.cooldownBajadaSeg = detail::leerEntero("COOLDOWN_BAJADA_SEG", 300);
+    // 240 s = 3 periodos de la MA + 1 de margen por el retraso de CloudWatch (con
+    // MA_VENTANA=3 y PERIOD_SEG=60). Ver la invariante en validarConfig().
+    cfg.cooldownBajadaSeg = detail::leerEntero("COOLDOWN_BAJADA_SEG", 240);
     cfg.warmupTimeoutSeg  = detail::leerEntero("WARMUP_TIMEOUT_SEG", 600);
     cfg.minCapacity       = detail::leerEntero("MIN_CAPACITY", 1);
     cfg.maxCapacity       = detail::leerEntero("MAX_CAPACITY", 5);
 
     cfg.stateFile = detail::leerTexto("STATE_FILE", "state/controller_state.json");
     cfg.logFile   = detail::leerTexto("LOG_FILE", "logs/decisions.jsonl");
-
-    // Heredados: se leen con default para que el controller viejo siga arrancando
-    // mientras se completa el refactor. Desaparecen en el Paso 5.
-    cfg.loadBalancerArn        = detail::leerTexto("LOAD_BALANCER_ARN", "");
-    cfg.targetGroupArn         = detail::leerTexto("TARGET_GROUP_ARN", "");
-    cfg.umbralRtSubida         = detail::leerDouble("UMBRAL_RT_SUBIDA", 1.0);
-    cfg.umbralRtBajada         = detail::leerDouble("UMBRAL_RT_BAJADA", 1.0);
-    cfg.cooldownCiclos         = detail::leerEntero("COOLDOWN_CICLOS", 3);
-    cfg.timeoutOperacionCiclos = detail::leerEntero("TIMEOUT_OPERACION_CICLOS", 6);
-    cfg.pasoMaximoSubida       = detail::leerEntero("PASO_MAXIMO_SUBIDA", 2);
 
     validarConfig(cfg);
     return cfg;
