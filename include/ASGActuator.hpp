@@ -1,24 +1,23 @@
 #pragma once
 #include <string>
-#include "IActuator.hpp"
 #include <aws/autoscaling/AutoScalingClient.h>
-#include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
 
-class ASGActuator : public IActuator {
+struct ResultadoAccion {
+    bool exito;
+    std::string mensaje;   // motivo del error, o "OK" si exito es true
+};
+
+// SetDesiredCapacity sobre el ASG (seccion 4.9), con HonorCooldown=false porque el
+// cooldown es nuestro. Los limites [MIN, MAX] y el paso ±1 ya los aplico el combinador
+// antes de llegar aqui: el actuador solo ejecuta.
+class ASGActuator {
 public:
-    ASGActuator(std::string asgName, const std::string& region,
-                std::string targetGroupArn, int capacidadMin, int capacidadMax);
+    ASGActuator(std::string asgName, const std::string& region);
 
-    int capacidadActual() override;
-    bool ejecutar(const std::string& decision, int paso) override;
-    bool instanciasRestantesSanas() override;
-    bool operacionTermino() override;
+    // desired ABSOLUTO, ya calculado por el combinador (Veredicto::desiredObjetivo).
+    ResultadoAccion fijarCapacidad(int desired);
 
 private:
     std::string asgName_;
-    std::string targetGroupArn_;
-    int capacidadMin_;
-    int capacidadMax_;
     Aws::AutoScaling::AutoScalingClient asClient_;
-    Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client elbClient_;
 };

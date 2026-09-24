@@ -8,15 +8,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(AWSSDK REQUIRED COMPONENTS
     monitoring
     autoscaling
-    elasticloadbalancingv2
 )
 
 add_executable(controller
     src/main.cpp
-    src/DecisionEngine.cpp
-    src/MetricSource.cpp
+    src/CloudWatchMetricSource.cpp
     src/ASGActuator.cpp
     src/Logger.cpp
+    src/StateStore.cpp
 )
 
 target_include_directories(controller PRIVATE

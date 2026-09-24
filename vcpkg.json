@@ -9,8 +9,7 @@
       "default-features": false,
       "features": [
         "monitoring",
-        "autoscaling",
-        "elasticloadbalancingv2"
+        "autoscaling"
       ]
     }
   ]

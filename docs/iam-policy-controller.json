@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LeerMetricasDeCloudWatch",
+      "Effect": "Allow",
+      "Action": "cloudwatch:GetMetricData",
+      "Resource": "*"
+    },
+    {
+      "Sid": "LeerEstadoDelAutoScalingGroup",
+      "Effect": "Allow",
+      "Action": "autoscaling:DescribeAutoScalingGroups",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EscalarSoloElAsgDelController",
+      "Effect": "Allow",
+      "Action": "autoscaling:SetDesiredCapacity",
+      "Resource": "arn:aws:autoscaling:REGION:ACCOUNT_ID:autoScalingGroup:*:autoScalingGroupName/ASG-App"
+    }
+  ]
+}
