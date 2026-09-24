@@ -57,35 +57,37 @@ function leerPerfil(ruta) {
     throw new Error(`${ruta}: se esperaba una cabecera y al menos una fila de fase`);
   }
   const cabecera = lineas[0].split(',').map((c) => c.trim());
-  const esperada = ['fase', 'multiplo_inicio', 'multiplo_fin', 'duracion_seg'];
+  const esperada = ['fase', 'multiplo_inicio', 'multiplo_fin', 'duracion_seg', 'salto_intencional'];
   if (cabecera.join(',') !== esperada.join(',')) {
     throw new Error(`${ruta}: cabecera inesperada "${cabecera.join(',')}", se esperaba "${esperada.join(',')}"`);
   }
 
   const fases = lineas.slice(1).map((linea, i) => {
     const cols = linea.split(',').map((c) => c.trim());
-    if (cols.length !== 4) {
-      throw new Error(`${ruta}: fila ${i + 2} con ${cols.length} columnas, se esperaban 4: "${linea}"`);
+    if (cols.length !== 5) {
+      throw new Error(`${ruta}: fila ${i + 2} con ${cols.length} columnas, se esperaban 5: "${linea}"`);
     }
-    const [fase, multiploInicio, multiploFin, duracionSeg] = cols;
+    const [fase, multiploInicio, multiploFin, duracionSeg, saltoIntencionalStr] = cols;
     const mi = parseFloat(multiploInicio);
     const mf = parseFloat(multiploFin);
     const dur = parseInt(duracionSeg, 10);
+    const saltoIntencional = saltoIntencionalStr === '1';
     if (!Number.isFinite(mi) || mi < 0) throw new Error(`${ruta}: fila ${i + 2} ("${fase}"): multiplo_inicio invalido`);
     if (!Number.isFinite(mf) || mf < 0) throw new Error(`${ruta}: fila ${i + 2} ("${fase}"): multiplo_fin invalido`);
     if (!Number.isInteger(dur) || dur <= 0) throw new Error(`${ruta}: fila ${i + 2} ("${fase}"): duracion_seg invalida`);
-    return { fase, multiploInicio: mi, multiploFin: mf, duracionSeg: dur };
+    return { fase, multiploInicio: mi, multiploFin: mf, duracionSeg: dur, saltoIntencional };
   });
 
-  // Cada fase debe arrancar donde termino la anterior: si no, el perfil tiene un salto
-  // brusco de tasa que casi seguro es un error de edicion del CSV, no algo intencional.
+  // Validar continuidad entre fases. Los saltos bruscos son permitidos solo si
+  // la fase actual declara salto_intencional=1.
   for (let i = 1; i < fases.length; i++) {
     const prev = fases[i - 1];
     const cur = fases[i];
-    if (Math.abs(prev.multiploFin - cur.multiploInicio) > 1e-9) {
+    const hayDiscontinuidad = Math.abs(prev.multiploFin - cur.multiploInicio) > 1e-9;
+    if (hayDiscontinuidad && !cur.saltoIntencional) {
       throw new Error(
         `${ruta}: la fase "${cur.fase}" empieza en ${cur.multiploInicio}x pero "${prev.fase}" termino en ` +
-        `${prev.multiploFin}x. Deberian coincidir (o la fase "${cur.fase}" declararia el salto a proposito).`
+        `${prev.multiploFin}x. Deberian coincidir, o declarar salto_intencional=1 en la fila de "${cur.fase}".`
       );
     }
   }
@@ -96,9 +98,9 @@ const FASES = leerPerfil(SCENARIO_CSV);
 
 // ---- Arma el executor ramping-arrival-rate a partir de las fases -----------------
 
-const startRate = Math.max(FASES[0].multiploInicio * RATE_POR_C, 0.01); // k6 exige rate > 0
+const startRate = Math.max(1, Math.round(FASES[0].multiploInicio * RATE_POR_C)); // k6 exige int >= 1
 const stages = FASES.map((f) => ({
-  target: Math.max(f.multiploFin * RATE_POR_C, 0.01),
+  target: Math.max(1, Math.round(f.multiploFin * RATE_POR_C)),
   duration: `${f.duracionSeg}s`,
 }));
 
