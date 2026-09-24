@@ -1,14 +1,18 @@
 #include <aws/core/Aws.h>
-#include <thread>
 #include <chrono>
 #include <iostream>
-#include "Config.hpp"
-#include "MovingAverage.hpp"
-#include "CooldownManager.hpp"
-#include "MetricSource.hpp"
+#include <thread>
 #include "ASGActuator.hpp"
-#include "Logger.hpp"
+#include "CloudWatchMetricSource.hpp"
+#include "Config.hpp"
+#include "DecisionCombiner.hpp"
 #include "DecisionEngine.hpp"
+#include "HoltForecaster.hpp"
+#include "Logger.hpp"
+#include "ProactivePolicy.hpp"
+#include "ReactivePolicy.hpp"
+#include "SafetyGuards.hpp"
+#include "StateStore.hpp"
 
 int main() {
     Aws::SDKOptions options;
@@ -17,22 +21,43 @@ int main() {
     try {
         Config cfg = cargarConfigDesdeEntorno();
         {
-            MetricSource metrics(cfg.asgName, cfg.loadBalancerArn, cfg.targetGroupArn, cfg.region);
-            MovingAverage maCpu(cfg.maVentana);
-            MovingAverage maRt(cfg.maVentana);
-            CooldownManager cooldown(cfg.cooldownCiclos);
-            ASGActuator actuator(cfg.asgName, cfg.region, cfg.targetGroupArn,
-                                  cfg.minCapacity, cfg.maxCapacity);
+            CloudWatchMetricSource metrics(cfg.asgName, cfg.loadBalancerDim, cfg.targetGroupDim,
+                                           cfg.region, cfg.periodoSeg);
+            ASGActuator actuator(cfg.asgName, cfg.region);
             Logger logger(cfg.logFile);
+            StateStore stateStore(cfg.stateFile);
 
-            maCpu.prellenar(metrics.obtenerHistorialInicial(cfg.maVentana));
-            maRt.prellenar(metrics.obtenerHistorialInicialRT(cfg.maVentana));
+            HoltForecaster holt(cfg.holtAlpha, cfg.holtBeta);
+            ReactivePolicy reactiva(cfg.umbralAlto, cfg.umbralBajo, cfg.maVentana);
+            ProactivePolicy proactiva(holt, cfg.cRpm, cfg.horizontePeriodos, cfg.minCapacity, cfg.maxCapacity);
+            SafetyGuards guardas(cfg);
+            DecisionCombiner combinador(cfg, guardas);
 
-            DecisionEngine engine(cfg, metrics, maCpu, maRt, cooldown, actuator, logger);
+            // Recalienta desde el ultimo estado guardado (seccion 4.10). Si no hay
+            // archivo o esta corrupto, arranca en frio: EstadoControlador vacio no rompe
+            // ningun restaurar() (ya probado en el Paso 7, secuencia 11).
+            EstadoControlador estado = stateStore.cargar();
+            if (!stateStore.ultimaCargaValida()) {
+                std::cerr << "Aviso: " << stateStore.ultimoMotivoCarga() << std::endl;
+            }
+            reactiva.restaurar(estado.ventanaMaCpu);
+            holt.restaurar(estado.holt);
+            proactiva.restaurar(estado.demanda);
 
+            DecisionEngine engine(cfg, metrics, actuator, logger, stateStore, holt,
+                                  reactiva, proactiva, guardas, combinador);
+            engine.restaurar(estado);
+
+            // Se consulta cada POLL_INTERVAL_SEG, pero el engine solo decide (y solo
+            // escribe una linea de log) cuando llega un periodo de CloudWatch nuevo
+            // (seccion 4.3). El reloj real solo entra aqui, como parametro: la logica de
+            // decision nunca lo lee directamente.
             while (true) {
-                engine.ejecutarCiclo();
-                std::this_thread::sleep_for(std::chrono::seconds(cfg.pollIntervalSeg)); //toma el valor de la variable de entorno, y pausa el programa por ese tiempo antes de vovler a ejecutar el ciclo
+                const auto ahora = std::chrono::system_clock::now().time_since_epoch();
+                const DataTs tsReloj = static_cast<DataTs>(
+                    std::chrono::duration_cast<std::chrono::seconds>(ahora).count());
+                engine.procesarSiHayDatoNuevo(tsReloj);
+                std::this_thread::sleep_for(std::chrono::seconds(cfg.pollIntervalSeg));
             }
         }
     } catch (const std::exception& e) {

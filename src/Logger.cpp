@@ -44,9 +44,17 @@ void Logger::escribirLinea(const std::string& json) {
     archivo_.flush();
 }
 
-static std::string numeroONull(const std::optional<double>& v) {
+namespace {
+
+std::string numONull(const std::optional<double>& v) {
     return v ? std::to_string(*v) : "null";
 }
+
+std::string enteroONull(const std::optional<int>& v) {
+    return v ? std::to_string(*v) : "null";
+}
+
+} // namespace
 
 void Logger::registrar(const RegistroCiclo& r) {
     cycleId_++;
@@ -54,20 +62,55 @@ void Logger::registrar(const RegistroCiclo& r) {
     json << "{"
          << "\"timestamp\":\"" << timestampActual() << "\","
          << "\"cycle_id\":" << cycleId_ << ","
-         << "\"cpu_utilization\":" << numeroONull(r.cpuUtilization) << ","
-         << "\"moving_average_cpu\":" << numeroONull(r.movingAverageCpu) << ","
-         << "\"target_response_time\":" << numeroONull(r.targetResponseTime) << ","
-         << "\"moving_average_response_time\":" << numeroONull(r.movingAverageResponseTime) << ","
-         << "\"current_capacity\":"
-         << (r.capacidadActual ? std::to_string(*r.capacidadActual) : "null") << ","
-         << "\"decision\":\"" << escapar(r.decision) << "\","
-         << "\"decision_trigger\":\"" << escapar(r.decisionTrigger) << "\","
-         << "\"justification\":\"" << escapar(r.justificacion) << "\","
-         << "\"requested_action\":\"" << escapar(r.accionSolicitada) << "\","
-         << "\"action_result\":\"" << escapar(r.resultadoAccion) << "\","
-         << "\"operation_state\":\"" << escapar(r.estadoOperacion) << "\","
-         << "\"cooldown_remaining\":" << r.cooldownRestante << ","
-         << "\"request_count_per_target\":" << numeroONull(r.requestCountPerTarget)
+         << "\"data_ts\":" << r.dataTs << ","
+         << "\"period_s\":" << r.periodoSegundos << ","
+         << "\"ma_window\":" << r.ventanaMa << ","
+
+         << "\"cpu\":" << numONull(r.cpu) << ","
+         << "\"request_count\":" << numONull(r.requestCount) << ","
+         << "\"healthy_hosts\":" << numONull(r.healthyHosts) << ","
+
+         << "\"data_quality\":\"" << nombreCalidad(r.calidad) << "\","
+         << "\"data_issues\":[";
+    for (size_t i = 0; i < r.dataIssues.size(); i++) {
+        if (i) json << ",";
+        json << "\"" << escapar(r.dataIssues[i]) << "\"";
+    }
+    json << "],"
+
+         << "\"ma_cpu\":" << numONull(r.maCpu) << ","
+         << "\"reactive_signal\":\"" << nombreSenal(r.reactiveSignal) << "\","
+
+         << "\"holt_level\":" << numONull(r.holtLevel) << ","
+         << "\"holt_trend\":" << numONull(r.holtTrend) << ","
+         << "\"forecast_rpm\":" << numONull(r.forecastRpm) << ","
+         << "\"horizon\":" << r.horizon << ","
+         << "\"needed_instances\":" << enteroONull(r.neededInstances) << ","
+         << "\"proactive_signal\":\"" << nombreSenal(r.proactiveSignal) << "\","
+         << "\"spike_guard_applied\":" << (r.spikeGuardApplied ? "true" : "false") << ","
+
+         << "\"desired\":" << enteroONull(r.desired) << ","
+         << "\"in_service\":" << enteroONull(r.inService) << ","
+         << "\"pending\":" << enteroONull(r.pending) << ","
+
+         << "\"guards\":[";
+    for (size_t i = 0; i < r.guards.size(); i++) {
+        if (i) json << ",";
+        const auto& g = r.guards[i];
+        json << "{\"name\":\"" << escapar(g.nombre) << "\","
+             << "\"passed\":" << (g.paso ? "true" : "false") << ","
+             << "\"detail\":\"" << escapar(g.detalle) << "\","
+             << "\"warning\":" << (g.advertencia ? "true" : "false") << "}";
+    }
+    json << "],"
+         << "\"blocked_by\":" << (r.blockedBy.empty() ? "null" : "\"" + escapar(r.blockedBy) + "\"") << ","
+
+         << "\"decision\":\"" << nombreDecision(r.decision) << "\","
+         << "\"trigger\":\"" << nombreTrigger(r.trigger) << "\","
+         << "\"justification\":\"" << escapar(r.justification) << "\","
+
+         << "\"action_requested\":\"" << escapar(r.actionRequested) << "\","
+         << "\"action_result\":\"" << escapar(r.actionResult) << "\""
          << "}";
     escribirLinea(json.str());
 }
