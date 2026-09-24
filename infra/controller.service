@@ -1,0 +1,16 @@
+[Unit]
+Description=Auto-Scaling Controller (SI3016 EAFIT)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/var/lib/controller
+EnvironmentFile=/etc/controller.env
+ExecStart=/usr/local/bin/controller
+Restart=always
+RestartSec=5
+User=ubuntu
+Group=ubuntu
+
+[Install]
+WantedBy=multi-user.target
