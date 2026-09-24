@@ -1,0 +1,17 @@
+{
+  "name": "auto-scaling-controller",
+  "version": "0.1.0",
+  "description": "Controller de auto-escalado horizontal",
+  "builtin-baseline": "5f96cd15fd745122cf27e0524606d6c1efc5fd07",
+  "dependencies": [
+    {
+      "name": "aws-sdk-cpp",
+      "default-features": false,
+      "features": [
+        "monitoring",
+        "autoscaling",
+        "elasticloadbalancingv2"
+      ]
+    }
+  ]
+}

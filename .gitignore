@@ -1,6 +1,9 @@
 # Configuración local del controller
 controller.env
 
+# Entorno virtual de Python para correr infra/app/app.py en local
+infra/app/.venv/
+
 # Build
 build/
 cmake-build-*/
@@ -18,6 +21,14 @@ build-tests/
 logs/
 *.log
 
+# Estado persistente del controller (StateStore)
+state/
+
+# Credenciales
+*.pem
+*.key
+.aws/
+
 # Archivos temporales
 *.tmp
 *.swp
@@ -28,25 +39,15 @@ logs/
 
 
 # carpetas
-tests/
 estudio/
 
 # Sistema operativo
 .DS_Store
 Thumbs.db
 
-# Artefactos generados por vcpkg
-vcpkg/buildtrees/
-vcpkg/downloads/
-vcpkg/installed*/
-vcpkg/vcpkg_installed*/
-vcpkg/packages/
-vcpkg/scripts/buildsystems/tmp/
+# vcpkg completo: las dependencias se declaran en vcpkg.json (manifest), no se versionan.
+# Ver el README para instalarlo.
+vcpkg/
 
 # Resultados de pruebas de carga
 results/
-
-*.pem
-load-test.sh
-
-README.md
