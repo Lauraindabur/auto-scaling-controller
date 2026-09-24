@@ -8,9 +8,9 @@
 
 using namespace std;
 
-class MetricSource : public IMetricSource {   // Implementacion de la interfaz IMetricSource 
+class MetricSource : public IMetricSource {   // Implementacion de la interfaz IMetricSource, peude usarse cuando el engine espera es un IMetricSource
 public:
-    // Lanza runtime_error si los ARN no permiten derivar las dimensiones del ALB / Target Group.
+    // Lanza runtime_error si los ARN no permiten derivar las dimensiones del ALB / Target Group, que es lo que recibe el contructor
     MetricSource(string asgName, string loadBalancerArn, string targetGroupArn, const string& region);
 
     Lectura obtenerActual() override;

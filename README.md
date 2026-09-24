@@ -85,176 +85,44 @@ probar `DecisionEngine` sin AWS usando fakes.
 
 ---
 
-## 3. Configuración del controller
+## 2. Construcción de la AMI
 
-Toda la configuración viene de variables de entorno, todas **obligatorias** y sin valores por
-defecto; el archivo de ejemplo es `config/controller.env` (ignorado por git porque contiene
-ARN de la cuenta).
+La app de las instancias del ASG ([infra/app/app.py](infra/app/app.py) +
+[infra/app/app.service](infra/app/app.service)) ya no se instala con user-data en cada
+arranque: se hornea una vez en una **AMI propia**, así las instancias nuevas arrancan con
+la app lista y no dependen de que `apt install` funcione en ese momento. Esto reemplaza a
+[infra/user-data.sh](infra/user-data.sh) para las instancias del ASG: el Launch Template
+que use esta AMI va **sin user-data**, y el health check del Target Group debe apuntar a
+`/health` (no a `/`, que es el endpoint de carga).
 
-| Variable | Valor | Significado |
-|---|---|---|
-| `ASG_NAME` | `controller-asg` | Auto Scaling Group a gobernar |
-| `AWS_REGION` | `us-east-1` | Región |
-| `TARGET_GROUP_ARN` | `arn:aws:elasticloadbalancing:...:targetgroup/controller-target-group/<id>` | Target Group (salud y métrica de RT) |
-| `LOAD_BALANCER_ARN` | `arn:aws:elasticloadbalancing:...:loadbalancer/app/controller-lb/<id>` | ALB (métrica de RT) |
-| `UMBRAL_SUBIDA` / `UMBRAL_BAJADA` | `70.0` / `30.0` | Umbrales de CPU (%) |
-| `UMBRAL_RT_SUBIDA` / `UMBRAL_RT_BAJADA` | `1.0` / `1.0` | Umbrales de tiempo de respuesta (s) |
-| `VENTANA_MA` | `3` | Muestras de cada media móvil |
-| `COOLDOWN_CICLOS` | `3` | Ciclos de espera tras confirmar (o fallar por timeout) una operación |
-| `TIMEOUT_OPERACION_CICLOS` | `6` | Ciclos máximos que una operación puede estar `IN_PROGRESS` |
-| `CAPACIDAD_MIN` / `CAPACIDAD_MAX` | `1` / `5` | Límites de capacidad |
-| `PASO_MAXIMO_SUBIDA` | `2` | Máximo de instancias por decisión de subida |
-| `INTERVALO_CICLO_SEGUNDOS` | `60` | Segundos de espera entre ciclos |
+### Procedimiento (manual, sobre una instancia temporal)
 
-**Validación al iniciar.** Si una variable falta, está vacía, no es un número, o los valores
-son incoherentes, el controller termina con código 1 y un mensaje claro, antes de tocar AWS:
+Instancia temporal: Ubuntu Server 24.04 LTS, `t2.micro`, en una subred pública (solo para
+la construcción; se termina después de crear la AMI).
 
-- `VENTANA_MA >= 1`, `TIMEOUT_OPERACION_CICLOS >= 1`, `PASO_MAXIMO_SUBIDA >= 1`,
-  `INTERVALO_CICLO_SEGUNDOS >= 1`, `COOLDOWN_CICLOS >= 0`.
-- `0 <= UMBRAL_BAJADA < UMBRAL_SUBIDA <= 100`.
-- `0 < UMBRAL_RT_BAJADA <= UMBRAL_RT_SUBIDA`.
-- `1 <= CAPACIDAD_MIN <= CAPACIDAD_MAX`.
-- Los ARN del ALB y del Target Group deben poder interpretarse (contener `app/` y
-  `targetgroup/`), porque el RT es métrica de decisión y sin ellos el controller fallaría
-  todos los ciclos.
+1. `sudo apt update && sudo apt install -y python3-flask`
+2. Copiar `app.py` a `/opt/app/app.py` y `app.service` a
+   `/etc/systemd/system/app.service`.
+3. `sudo systemctl daemon-reload && sudo systemctl enable --now app`
+4. Verificar con `curl http://localhost/health` y `curl http://localhost/`.
+5. Prueba de reinicio: `sudo reboot` y, sin volver a entrar por SSH, comprobar
+   `curl http://<ip-publica-temporal>/health` desde fuera — confirma que
+   `Restart=always` y `enable` dejan la app funcionando sola tras un arranque en frío.
+6. `sudo apt clean` y crear la imagen (**Actions → Image → Create image**) con nombre
+   `ami-autoscaling-app-v1`.
 
-Ejemplo: `UMBRAL_SUBIDA=abc` → `Error al iniciar el controller: UMBRAL_SUBIDA debe ser un número, valor recibido: 'abc'`.
-
----
-
-## 4. Despliegue y ejecución
-
-### Requisitos
-
-- Linux (probado en Ubuntu sobre WSL2), CMake ≥ 3.13, g++ con C++17.
-- AWS SDK for C++ instalado con vcpkg: `aws-sdk-cpp[monitoring,autoscaling,elasticloadbalancingv2]`.
-- Credenciales de AWS con los permisos de la sección 2 (`aws configure` o variables `AWS_*`).
-
-### Compilar
+### Cómo correr la app en local (para probarla antes de hornear la AMI)
 
 ```bash
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build
+cd infra/app
+python3 -m venv .venv && source .venv/bin/activate   # opcional, recomendado
+pip install flask
+PORT=8080 python3 app.py
 ```
 
-(Ajusta la ruta del toolchain si vcpkg está en otro lugar, por ejemplo `~/vcpkg`.)
-
-### Ejecutar
-
-Desde la raíz del proyecto, porque el log se escribe en la ruta relativa `logs/decisions.jsonl`
-(la carpeta `logs/` debe existir):
-
-```bash
-mkdir -p logs
-source config/controller.env
-./build/controller
-```
-
-- Corre en primer plano hasta `Ctrl+C`. Escribe una línea de log por ciclo y no imprime nada en pantalla.
-- **Cambia la capacidad real del ASG** `ASG_NAME`: comprueba nombres, región y ARN antes de arrancar.
-- Al arrancar prellena las medias móviles con ~3 minutos de historial; hasta tener 3 muestras
-  de cada métrica registra "historial insuficiente".
-- El controller es un proceso simple sin persistencia: si se detiene, no escala; si se reinicia,
-  pierde el estado de cooldown y de la operación en curso.
-
-### Seguir lo que hace
-
-```bash
-tail -f logs/decisions.jsonl | jq -c '[.timestamp,.moving_average_cpu,.moving_average_response_time,.current_capacity,.decision,.justification]'
-```
+En otra terminal: `curl http://localhost:8080/` y `curl http://localhost:8080/health`.
+Sin `sudo`: el puerto 8080 no es privilegiado, a diferencia del 80 (que exige root, por
+eso `app.service` corre como `User=root`). `infra/app/.venv/` está en `.gitignore`.
 
 ---
 
-## 5. Generación de carga
-
-[scripts/load-test.sh](scripts/load-test.sh) usa **Apache Bench (`ab`)** contra el **DNS del
-Load Balancer** (nunca la IP de una instancia, para que el ALB reparta el tráfico y las
-instancias nuevas reciban carga). Se ejecuta desde WSL/Ubuntu.
-
-```bash
-sudo apt update && sudo apt install -y apache2-utils     # una sola vez
-scripts/load-test.sh check     # 10 requests, 1 conexión: verifica el ALB y mide ms/request
-scripts/load-test.sh           # prueba completa (pide escribir "si")
-scripts/load-test.sh idle      # solo la fase de reposo, sin generar tráfico
-```
-
-Opciones (o las variables de entorno indicadas): `--dns` (`LB_DNS`), `--levels "2 8 16"`
-(`LEVELS`), `--duration <s>` (`LEVEL_DURATION_SECONDS`), `--idle-minutes <min>`
-(`IDLE_MINUTES`), `--yes`. El DNS por defecto está en el script; si recreas el ALB, pásalo
-con `--dns <dns-del-alb>`.
-
-### Procedimiento
-
-1. **Niveles crecientes**, en secuencia y sin pausa: concurrencia **2 → 8 → 16**, 600 s cada uno.
-2. **Fase de reposo** de 20 minutos sin enviar tráfico ("bajar la carga"): el script anuncia
-   `GENERADOR DETENIDO` y así se observa el escalado hacia abajo.
-3. Cada evento imprime una **marca de tiempo UTC** al inicio y al final de cada nivel, para correlacionar con `logs/decisions.jsonl`.
-
-
----
-
-## 6. Registro de decisiones
-
-El controller escribe **una línea JSON por ciclo** en `logs/decisions.jsonl` (formato JSONL,
-modo *append*, se vacía a disco en cada línea). Registra todos los ciclos, también los de
-mantenimiento, fallo de métrica, cooldown u operación en curso. `logs/` está ignorado por git.
-
-### Ejemplo (subida por tiempo de respuesta)
-
-```json
-{"timestamp":"2026-09-21T18:27:01Z","cycle_id":1,"cpu_utilization":45.200000,"moving_average_cpu":41.700000,"target_response_time":2.400000,"moving_average_response_time":2.500000,"current_capacity":1,"decision":"INCREASE_CAPACITY","decision_trigger":"RT","justification":"MA_RT por encima del umbral de subida; capacidad objetivo 3, paso +2","requested_action":"INCREASE_CAPACITY -> 3","action_result":"IN_PROGRESS","operation_state":"IN_PROGRESS","cooldown_remaining":0,"request_count_per_target":310.000000}
-```
-
-### Campos
-
-| Campo | Significado |
-|---|---|
-| `timestamp` | Hora UTC (`YYYY-MM-DDTHH:MM:SSZ`), la misma referencia que usa `load-test.sh` |
-| `cycle_id` | Contador de ciclos desde que arrancó el proceso |
-| `cpu_utilization`, `target_response_time` | Muestras crudas de ese ciclo (%, segundos); `null` si el ciclo falló |
-| `moving_average_cpu`, `moving_average_response_time` | Medias móviles; `null` hasta tener historial suficiente |
-| `current_capacity` | Capacidad deseada del ASG al evaluar; `null` si el ciclo terminó antes de consultarla |
-| `decision` | `INCREASE_CAPACITY`, `REDUCE_CAPACITY` o `MAINTAIN_CAPACITY` |
-| `decision_trigger` | Qué métrica motivó la decisión: `CPU`, `RT`, `CPU+RT` o `NONE` |
-| `justification` | Motivo en texto (ver abajo) |
-| `requested_action` | Acción y capacidad solicitada al ASG (`INCREASE_CAPACITY -> 3`) o `NONE` |
-| `action_result` | `N/A`, `IN_PROGRESS` (orden aceptada), `SUCCESSFUL` (operación confirmada), `FAILED` (error de API o timeout) |
-| `operation_state` | Estado de la operación: `NONE`, `IN_PROGRESS` o `FAILED` (solo en el ciclo en que se declara el timeout) |
-| `cooldown_remaining` | Ciclos de cooldown que quedan |
-| `request_count_per_target` | `RequestCountPerTarget` del ALB; solo observabilidad, **no** interviene en la decisión |
-
-### Justificaciones que puede registrar
-
-- `historial insuficiente: MA_CPU` / `MA_RT` / `MA_CPU y MA_RT`
-- `CPUUtilization no disponible tras agotar reintentos` (o `TargetResponseTime`, o ambas)
-- `operación en curso`
-- `operación confirmada, inicia cooldown`
-- `operación excedió el tiempo máximo (6 ciclos), se marca como fallida`
-- `en periodo de cooldown`
-- Subida: `MA_CPU por encima del umbral de subida; capacidad objetivo 2, paso +1`,
-  `MA_RT por encima del umbral de subida; capacidad objetivo 3, paso +2`,
-  `MA_CPU y MA_RT por encima de sus umbrales de subida; capacidad objetivo ..., paso +...`
-- Bajada: `MA_CPU y MA_RT por debajo de sus umbrales de bajada`
-- `límite máximo alcanzado (...)`, `límite mínimo alcanzado (...)`, `no seguro reducir`
-- `MA_CPU baja pero MA_RT no está por debajo del umbral de bajada`
-- `dentro del rango esperado`
-- `capacidad actual no disponible`
-
-
----
-
-## 8. Estructura del repositorio
-
-```
-include/, src/        Código del controller (DecisionEngine, MetricSource, ASGActuator, Logger, ...)
-tests/                Pruebas offline y su CMakeLists.txt independiente
-infra/user-data.sh    User-data del Launch Template (app Flask en :80)
-scripts/load-test.sh  Generador de carga escalonada con Apache Bench
-config/               controller.env (variables de entorno)
-logs/                 decisions.jsonl (generado al ejecutar)
-results/              Resultados de las pruebas de carga (generado)
-CMakeLists.txt        Build principal (usa el AWS SDK vía vcpkg)
-```
-
----
--->

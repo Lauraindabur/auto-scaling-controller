@@ -96,9 +96,9 @@ void DecisionEngine::ejecutarCiclo() {
     std::string decision, justificacion;
     int paso = 1;   // instancias a sumar si se decide subir
 
-    bool subidaCpu = maCpu > cfg_.umbralSubida;
+    bool subidaCpu = maCpu > cfg_.umbralAlto;
     bool subidaRt = maRt > cfg_.umbralRtSubida;
-    bool bajadaCpu = maCpu < cfg_.umbralBajada;
+    bool bajadaCpu = maCpu < cfg_.umbralBajo;
     bool bajadaRt = maRt < cfg_.umbralRtBajada;
 
     if (subidaCpu || subidaRt) {
@@ -114,7 +114,7 @@ void DecisionEngine::ejecutarCiclo() {
             reg.decisionTrigger = "RT";
             motivo = "MA_RT por encima del umbral de subida";
         }
-        if (capacidad >= cfg_.capacidadMax) {
+        if (capacidad >= cfg_.maxCapacity) {
             decision = "MAINTAIN_CAPACITY"; justificacion = "límite máximo alcanzado (" + motivo + ")";
         } else {
             decision = "INCREASE_CAPACITY";
@@ -122,7 +122,7 @@ void DecisionEngine::ejecutarCiclo() {
                 // Subida proporcional: N_necesarias = techo(N_actual * MA_RT / umbral_RT).
                 // Si solo disparo la CPU no hay modelo medido, y el paso se queda en +1.
                 int necesarias = static_cast<int>(std::ceil(capacidad * maRt / cfg_.umbralRtSubida));
-                necesarias = std::min(necesarias, cfg_.capacidadMax);   // tope 1: capacidad maxima
+                necesarias = std::min(necesarias, cfg_.maxCapacity);   // tope 1: capacidad maxima
                 paso = necesarias - capacidad;
                 paso = std::min(paso, cfg_.pasoMaximoSubida);           // tope 2: paso maximo
                 paso = std::max(paso, 1);                               // nunca menos de +1
@@ -134,7 +134,7 @@ void DecisionEngine::ejecutarCiclo() {
         // BAJAR: conservador, exige CPU baja Y tiempo de respuesta bajo.
         reg.decisionTrigger = "CPU+RT";
         const std::string motivo = "MA_CPU y MA_RT por debajo de sus umbrales de bajada";
-        if (capacidad <= cfg_.capacidadMin) {
+        if (capacidad <= cfg_.minCapacity) {
             decision = "MAINTAIN_CAPACITY"; justificacion = "límite mínimo alcanzado (" + motivo + ")";
         } else if (!actuator_.instanciasRestantesSanas()) {
             decision = "MAINTAIN_CAPACITY"; justificacion = "no seguro reducir";

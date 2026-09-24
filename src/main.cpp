@@ -18,21 +18,21 @@ int main() {
         Config cfg = cargarConfigDesdeEntorno();
         {
             MetricSource metrics(cfg.asgName, cfg.loadBalancerArn, cfg.targetGroupArn, cfg.region);
-            MovingAverage maCpu(cfg.ventanaMA);
-            MovingAverage maRt(cfg.ventanaMA);
+            MovingAverage maCpu(cfg.maVentana);
+            MovingAverage maRt(cfg.maVentana);
             CooldownManager cooldown(cfg.cooldownCiclos);
             ASGActuator actuator(cfg.asgName, cfg.region, cfg.targetGroupArn,
-                                  cfg.capacidadMin, cfg.capacidadMax);
-            Logger logger("logs/decisions.jsonl");
+                                  cfg.minCapacity, cfg.maxCapacity);
+            Logger logger(cfg.logFile);
 
-            maCpu.prellenar(metrics.obtenerHistorialInicial(cfg.ventanaMA));
-            maRt.prellenar(metrics.obtenerHistorialInicialRT(cfg.ventanaMA));
+            maCpu.prellenar(metrics.obtenerHistorialInicial(cfg.maVentana));
+            maRt.prellenar(metrics.obtenerHistorialInicialRT(cfg.maVentana));
 
             DecisionEngine engine(cfg, metrics, maCpu, maRt, cooldown, actuator, logger);
 
             while (true) {
                 engine.ejecutarCiclo();
-                std::this_thread::sleep_for(std::chrono::seconds(cfg.intervaloCicloSegundos)); //toma el valor de la variable de entorno, y pausa el programa por ese tiempo antes de vovler a ejecutar el ciclo 
+                std::this_thread::sleep_for(std::chrono::seconds(cfg.pollIntervalSeg)); //toma el valor de la variable de entorno, y pausa el programa por ese tiempo antes de vovler a ejecutar el ciclo
             }
         }
     } catch (const std::exception& e) {
