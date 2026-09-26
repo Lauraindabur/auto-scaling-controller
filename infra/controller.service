@@ -1,5 +1,5 @@
 [Unit]
-Description=Auto-Scaling Controller (SI3016 EAFIT)
+Description=Auto-Scaling Controller LIG
 After=network-online.target
 Wants=network-online.target
 
@@ -14,3 +14,4 @@ Group=ubuntu
 
 [Install]
 WantedBy=multi-user.target
+ls -la /usr/local/bin/controller

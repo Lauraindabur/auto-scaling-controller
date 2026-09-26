@@ -1,0 +1,4 @@
+fase,multiplo_inicio,multiplo_fin,duracion_seg,salto_intencional
+base,0.4,0.4,240,0
+rampa,0.4,3.0,600,0
+meseta,3.0,3.0,360,0

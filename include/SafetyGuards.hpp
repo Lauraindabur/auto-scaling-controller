@@ -40,14 +40,14 @@ class SafetyGuards {
 public:
     explicit SafetyGuards(const Config& cfg) : cfg_(cfg) {}
 
-    // "Hay capacidad en camino": instancias arrancando, o targets que el ALB todavia no
-    // reporta sanos. El engine usa esto para mantener EstadoGuardas::tsWarmupDesde.
-    bool capacidadEnCamino(const MetricSnapshot& s, const Calidad& cal) const {
-        if (s.pending.value_or(0) > 0) return true;
-        if (cal.hostsSanos.has_value() && s.inService.has_value()) {
-            return *cal.hostsSanos < *s.inService;
-        }
-        return false;
+    // "Hay capacidad en camino": solo instancias activamente arrancando (Pending > 0). El
+    // engine usa esto para mantener EstadoGuardas::tsWarmupDesde. HealthyHostCount <
+    // InService sin Pending NO cuenta aqui: es una caida sin reemplazo (todo lo que habia
+    // se cayo y nada nuevo se esta lanzando), no un warm-up en progreso, y bloquear la
+    // subida ahi es contraproducente (bug confirmado 25-sep-2026: cpu=100%, sanos=0,
+    // inService=1, pending=0, warmup bloqueaba la subida indefinidamente).
+    bool capacidadEnCamino(const MetricSnapshot& s, const Calidad&) const {
+        return s.pending.value_or(0) > 0;
     }
 
     VeredictoGuardas evaluarSubida(const MetricSnapshot& s, const Calidad& cal,

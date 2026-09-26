@@ -223,7 +223,7 @@ inline Config cargarConfigDesdeEntorno() {
 
     cfg.holtAlpha         = detail::leerDouble("HOLT_ALPHA", 0.5);
     cfg.holtBeta          = detail::leerDouble("HOLT_BETA", 0.3);
-    cfg.horizontePeriodos = detail::leerEntero("HORIZONTE_PERIODOS", 2);
+    cfg.horizontePeriodos = detail::leerEntero("HORIZONTE_PERIODOS", 3);
     cfg.cRpm              = detail::leerDouble("C_RPM", 480.0);
 
     cfg.cooldownSubidaSeg = detail::leerEntero("COOLDOWN_SUBIDA_SEG", 120);

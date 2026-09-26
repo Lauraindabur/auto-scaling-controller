@@ -76,6 +76,16 @@ optional<double> valorEnPeriodo(const vector<Punto>& puntos, DataTs inicio) {
     return nullopt;
 }
 
+// RequestCount (Sum) a veces todavia no esta publicado en el minuto del ciclo actual
+// cuando se consulta (retraso de publicacion de CloudWatch, confirmado con datos reales:
+// el mismo minuto SI tenia dato unos minutos despues). Si falta justo en dataTs, se usa
+// el minuto anterior si ya llego; si tampoco esta, sigue ausente igual que antes. No
+// cambia el ciclo de decision (sigue en dataTs) ni las queries de CPU/HealthyHostCount.
+optional<double> valorRequestCount(const vector<Punto>& puntos, DataTs dataTs, int periodoSegundos) {
+    if (auto v = valorEnPeriodo(puntos, dataTs)) return v;
+    return valorEnPeriodo(puntos, dataTs - periodoSegundos);
+}
+
 const Aws::CloudWatch::Model::MetricDataResult* buscarResultado(
     const vector<Aws::CloudWatch::Model::MetricDataResult>& resultados, const string& id) {
     for (const auto& r : resultados) {
@@ -147,7 +157,7 @@ optional<MetricSnapshot> CloudWatchMetricSource::ultimoPeriodoCompleto() {
     s.dataTs = dataTs;
     s.periodoSegundos = periodoSegundos_;
     s.cpu = valorEnPeriodo(puntosCpu, dataTs);
-    s.requestCount = valorEnPeriodo(puntosRc, dataTs);
+    s.requestCount = valorRequestCount(puntosRc, dataTs, periodoSegundos_);
     s.healthyHosts = valorEnPeriodo(puntosHh, dataTs);
 
     Aws::AutoScaling::Model::DescribeAutoScalingGroupsRequest asReq;

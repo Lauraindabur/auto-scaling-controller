@@ -1,0 +1,4 @@
+fase,multiplo_inicio,multiplo_fin,duracion_seg,salto_intencional
+salto,3.0,3.0,360,0
+bajada,3.0,0.4,480,0
+reposo,0.0,0.0,900,1

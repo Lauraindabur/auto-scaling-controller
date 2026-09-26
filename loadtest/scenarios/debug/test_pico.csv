@@ -1,0 +1,4 @@
+fase,multiplo_inicio,multiplo_fin,duracion_seg,salto_intencional
+base,0.4,0.4,240,0
+pico,2.0,2.0,60,1
+recuperacion,0.4,0.4,240,1
