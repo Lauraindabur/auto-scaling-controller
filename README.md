@@ -47,10 +47,10 @@ git clone <repo-url>
 cd controller
 ```
 
-### 2. Instalar dependencias (primera vez)
+### 2. Instalar dependencias 
 
 ```bash
-# Instalar vcpkg (si no lo tienes)
+# Instalar vcpkg 
 git clone https://github.com/Microsoft/vcpkg.git
 ./vcpkg/bootstrap-vcpkg.sh
 
@@ -248,12 +248,12 @@ flowchart TD
 
     P5 -->|Sí| P6{"¿La demanda ha subido<br/>de forma sostenida<br/>en los últimos 3 minutos?"}
 
-    P6 -->|Sí| PUP["🔼 UP<br/>Anticipar más capacidad<br/>para la demanda esperada"]
+    P6 -->|Sí| PUP[" UP<br/>Anticipar más capacidad<br/>para la demanda esperada"]
     P6 -->|No| PHOLD1["⏸ HOLD<br/>Ignorar pico aislado<br/>Esperar a confirmar tendencia"]
 
     P5 -->|No| P7{"¿Necesarias < actuales?"}
 
-    P7 -->|Sí| PDOWN["🔽 DOWN<br/>Se proyecta capacidad sobrante<br/>en los próximos minutos"]
+    P7 -->|Sí| PDOWN[" DOWN<br/>Se proyecta capacidad sobrante<br/>en los próximos minutos"]
     P7 -->|No| PHOLD2["⏸ HOLD<br/>La demanda proyectada<br/>coincide con capacidad"]
 
     classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
