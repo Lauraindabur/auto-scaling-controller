@@ -210,10 +210,10 @@ flowchart TD
     R2 -->|Sí| R3["Calcular MA3 = promedio<br/>de los últimos 3 minutos"]
 
     R3 --> R4{"¿MA3 > UMBRAL_ALTO<br/>70%?"}
-    R4 -->|Sí| RUP["🔼 UP<br/>La CPU está muy alta<br/>Pedir más instancias"]
+    R4 -->|Sí| RUP[" UP<br/>La CPU está muy alta<br/>Pedir más instancias"]
     R4 -->|No| R5{"¿MA3 < UMBRAL_BAJO<br/>30%?"}
 
-    R5 -->|Sí| RDOWN["🔽 DOWN<br/>La CPU está muy baja<br/>Se puede quitar instancias"]
+    R5 -->|Sí| RDOWN[" DOWN<br/>La CPU está muy baja<br/>Se puede quitar instancias"]
     R5 -->|No| RHOLD["⏸ HOLD<br/>La CPU está en zona segura<br/>Mantener capacidad"]
 
     classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
@@ -279,13 +279,13 @@ flowchart TD
     Q1 -->|Sí| G1["Evaluar guardas de subida:<br/>• Dato completo y fresco<br/>• No estamos en máximo (5)<br/>• ≥120 seg desde última subida<br/>• Sin instancias Pending bloqueadas"]
     
     G1 --> G1R{"¿Todas<br/>pasan?"}
-    G1R -->|Sí| UP["✅ SUBE 1 instancia"]
+    G1R -->|Sí| UP[" SUBE 1 instancia"]
     G1R -->|No| WAIT1["⏸ Se mantiene igual<br/>Motivo guardado en log"]
     
     Q2 -->|Sí| G2["Evaluar guardas de bajada:<br/>• Dato completo y frescos<br/>• No estamos en mínimo (1)<br/>• n confirmado por HealthyHostCount<br/>• ≥240 seg desde última acción<br/>• CPU proyectada < 60%<br/>• Demanda/instancia < 480 RPM"]
     
     G2 --> G2R{"¿Todas<br/>pasan?"}
-    G2R -->|Sí| DOWN["✅ BAJA 1 instancia"]
+    G2R -->|Sí| DOWN[" BAJA 1 instancia"]
     G2R -->|No| WAIT2["⏸ Se mantiene igual<br/>Motivo guardado en log"]
     
     Q2 -->|No| WAIT3["⏸ Se mantiene igual<br/>Señales no de acuerdo"]
@@ -337,8 +337,6 @@ La app de las instancias del ASG se crea una sola vez en una **AMI propia** (`am
 7. Limpiar y crear imagen:
    ```bash
    sudo apt clean
-   # AWS Console: Actions → Image → Create image
-   # Nombre: ami-autoscaling-app-v1
    ```
 
 ---
