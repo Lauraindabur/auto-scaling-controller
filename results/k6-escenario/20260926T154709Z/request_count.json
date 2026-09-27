@@ -1,0 +1,100 @@
+{
+    "Label": "RequestCount",
+    "Datapoints": [
+        {
+            "Timestamp": "2026-09-26T10:59:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:50:00-05:00",
+            "Sum": 227.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:58:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:49:00-05:00",
+            "Sum": 175.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:48:00-05:00",
+            "Sum": 176.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:57:00-05:00",
+            "Sum": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:06:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:05:00-05:00",
+            "Sum": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:56:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:04:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:55:00-05:00",
+            "Sum": 440.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:03:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:54:00-05:00",
+            "Sum": 1068.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:53:00-05:00",
+            "Sum": 699.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:02:00-05:00",
+            "Sum": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:52:00-05:00",
+            "Sum": 600.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:01:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:00:00-05:00",
+            "Sum": 0.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:51:00-05:00",
+            "Sum": 417.0,
+            "Unit": "Count"
+        }
+    ]
+}

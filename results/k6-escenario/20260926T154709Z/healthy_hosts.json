@@ -1,0 +1,100 @@
+{
+    "Label": "HealthyHostCount",
+    "Datapoints": [
+        {
+            "Timestamp": "2026-09-26T10:59:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:50:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:58:00-05:00",
+            "Average": 3.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:49:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:48:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:57:00-05:00",
+            "Average": 3.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:06:00-05:00",
+            "Average": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:05:00-05:00",
+            "Average": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:56:00-05:00",
+            "Average": 3.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:04:00-05:00",
+            "Average": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:55:00-05:00",
+            "Average": 3.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:03:00-05:00",
+            "Average": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:54:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:53:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:02:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:52:00-05:00",
+            "Average": 1.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:01:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T11:00:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        },
+        {
+            "Timestamp": "2026-09-26T10:51:00-05:00",
+            "Average": 2.0,
+            "Unit": "Count"
+        }
+    ]
+}

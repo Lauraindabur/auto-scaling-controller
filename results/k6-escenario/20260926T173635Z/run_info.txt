@@ -1,0 +1,9 @@
+run_id=20260926T173635Z
+target_url=http://ALB-App-1337253585.us-east-1.elb.amazonaws.com
+scenario_csv=/home/laura/controller/loadtest/scenarios/debug/test_probar_reactivo.csv
+c_rpm=480
+pre_allocated_vus=50
+max_vus=400
+req_timeout=10s
+inicio_utc=2026-09-26T17:36:35Z
+fin_utc=2026-09-26T17:44:52Z
