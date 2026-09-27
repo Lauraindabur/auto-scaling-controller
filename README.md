@@ -1,128 +1,344 @@
-# auto-scaling-controller
+# Auto-Scaling Controller en C++ para AWS
 
-Controller de autoescalado en C++ para AWS. Cada 60 segundos lee desde CloudWatch `CPUUtilization` de las instancias y `TargetResponseTime` del Application
-Load Balancer, las suaviza con una media móvil de 3 muestras y decide si subir, bajar o
-mantener la capacidad de un Auto Scaling Group. Cada decisión queda registrada en un log
-JSON con su justificación.
-
+Controlador de autoescalado horizontal en C++ para ejecutarse como un proceso continuo en una única instancia EC2. Implementa un ciclo de decisión híbrido reactivo-proactivo: observa métricas de CloudWatch, combina una política basada en umbrales de CPU con un pronóstico de demanda mediante suavizado de Holt, y ajusta la capacidad del ASG en consecuencia
 
 ---
 
-## 1. Cómo decide
+## Tabla de contenidos
 
-### Política
-
-`MA_CPU` y `MA_RT` son las medias móviles (3 muestras) de `CPUUtilization` (%) y de
-`TargetResponseTime` (segundos).
-
-| Decisión | Condición | Paso |
-|---|---|---|
-| **Subir** | `MA_CPU > 70` **o** `MA_RT > 1.0` | proporcional al exceso (ver abajo) |
-| **Bajar** | `MA_CPU < 30` **y** `MA_RT < 1.0`, con todas las instancias restantes Healthy | −1 |
-| **Mantener** | cualquier otro caso | — |
-
-La asimetría es deliberada: para subir basta con que **una** métrica detecte el problema
-(protege el servicio); para bajar hacen falta **las dos** (retirar capacidad es conservador).
-Los umbrales son estrictos: con `MA_RT` exactamente en 1.0 no se sube ni se baja.
-
-Capacidad mínima 1 y máxima 5. Si ya está en el máximo, la decisión es `MAINTAIN_CAPACITY`
-con la justificación "límite máximo alcanzado" (y análogo en el mínimo).
-
-<!--
-### Paso de subida proporcional
-
-Se basa en un modelo medido: el tiempo de respuesta se reparte entre las instancias,
-`tiempo_respuesta ≈ (concurrencia / instancias) × tiempo_por_petición`. Despejando:
-
-```
-N_necesarias = techo( N_actual × MA_RT / UMBRAL_RT_SUBIDA )
-N_necesarias = min(N_necesarias, CAPACIDAD_MAX)
-paso         = min(N_necesarias − N_actual, PASO_MAXIMO_SUBIDA)     (nunca menos de +1)
-```
-
-- Se aplica solo si `MA_RT` supera su umbral (disparador `RT` o `CPU+RT`).
-- Si la subida la disparó **solo la CPU**, el paso es +1: no hay un modelo medido que
-  relacione CPU con capacidad.
-- Ejemplos con `PASO_MAXIMO_SUBIDA=2`: capacidad 1 y `MA_RT`=1.319 → +1; capacidad 1 y
-  `MA_RT`=2.5 → +2; capacidad 1 y `MA_RT`=4.0 → pediría +3, queda en +2.
-
-### Ciclo (cada `INTERVALO_CICLO_SEGUNDOS`)
-
-1. **Métricas.** Consulta CPU y RT juntas. Si falla cualquiera de las dos, el ciclo entero es
-   un fallo: `MAINTAIN_CAPACITY` y no se actualiza ninguna media móvil.
-   - Para RT, "CloudWatch respondió sin datapoints" (no hubo tráfico) **no** es un fallo: la
-     muestra vale 0.0. Solo un error real de la API cuenta como fallo.
-2. **Historial.** Agrega las muestras. Si alguna de las dos medias tiene menos de 3 muestras:
-   `MAINTAIN_CAPACITY` ("historial insuficiente"). Al arrancar se prellenan con los últimos
-   ~3 minutos de CloudWatch.
-3. **Operación en curso.** Si el estado es `IN_PROGRESS`:
-   - si la operación se confirmó (instancias Healthy en el Target Group = capacidad deseada)
-     → se marca exitosa y **arranca el cooldown**;
-   - si lleva más de `TIMEOUT_OPERACION_CICLOS` ciclos sin confirmarse → se marca fallida, el
-     estado vuelve a `NONE` y **arranca el cooldown**. No se deshace nada;
-   - si no → `MAINTAIN_CAPACITY` ("operación en curso").
-4. **Cooldown.** Si está activo, `MAINTAIN_CAPACITY` y descuenta un ciclo. Dura
-   `COOLDOWN_CICLOS` ciclos y empieza cuando la operación se confirma (no cuando se dispara).
-5. **Evaluación.** Aplica la política de arriba y, si corresponde, llama a
-   `SetDesiredCapacity`. Si esa llamada falla, la capacidad no cambia y el estado vuelve a
-   `NONE` de inmediato, **sin** cooldown (un fallo de API deja el sistema en un estado conocido).
-6. **Registro.** Escribe una línea en `logs/decisions.jsonl` (sección 6).
-
-### Componentes
-
-| Componente | Responsabilidad |
-|---|---|
-| `DecisionEngine` | El ciclo de arriba: aplica la política y coordina todo lo demás |
-| `MovingAverage` | Media móvil de N muestras (una instancia para CPU y otra para RT) |
-| `CooldownManager` | Estado de la operación (`NONE`/`IN_PROGRESS`) y ciclos de cooldown |
-| `IMetricSource` / `MetricSource` | Lee CloudWatch (CPU, RT y `RequestCountPerTarget`) |
-| `IActuator` / `ASGActuator` | Lee y cambia la capacidad del ASG; consulta la salud en el Target Group |
-| `Logger` | Escribe el log JSON de decisiones |
-| `Config` | Lee y valida las variables de entorno |
-
-`IMetricSource` e `IActuator` son interfaces mínimas sin dependencias del AWS SDK: permiten
-probar `DecisionEngine` sin AWS usando fakes.
+1. [Requisitos previos](#requisitos-previos)
+2. [Quick start: compilar y ejecutar](#quick-start-compilar-y-ejecutar)
+3. [Estructura del repositorio](#estructura-del-repositorio)
+4. [Configuración](#configuración)
+5. [Cómo decide el controller](#cómo-decide-el-controller)
+6. [Métricas de CloudWatch](#métricas-de-cloudwatch)
+7. [Cómo leer el log de decisiones](#cómo-leer-el-log-de-decisiones)
+8. [Documentación adicional](#documentación-adicional)
+9. [Diagramas de arquitectura](#diagramas-de-arquitectura)
 
 ---
 
-## 2. Construcción de la AMI
+## Requisitos previos
 
-La app de las instancias del ASG ([infra/app/app.py](infra/app/app.py) +
-[infra/app/app.service](infra/app/app.service)) ya no se instala con user-data en cada
-arranque: se hornea una vez en una **AMI propia**, así las instancias nuevas arrancan con
-la app lista y no dependen de que `apt install` funcione en ese momento. Esto reemplaza a
-[infra/user-data.sh](infra/user-data.sh) para las instancias del ASG: el Launch Template
-que use esta AMI va **sin user-data**, y el health check del Target Group debe apuntar a
-`/health` (no a `/`, que es el endpoint de carga).
+### En la máquina (compilación)
 
-### Procedimiento (manual, sobre una instancia temporal)
+- **CMake** ≥ 3.13
+- **C++17** (g++ o clang)
+- **vcpkg** (package manager de C++): [Instalar](https://github.com/Microsoft/vcpkg)
+- **AWS SDK for C++** (se instala vía vcpkg): `monitoring` + `autoscaling`
 
-Instancia temporal: Ubuntu Server 24.04 LTS, `t2.micro`, en una subred pública (solo para
-la construcción; se termina después de crear la AMI).
+### En AWS
 
-1. `sudo apt update && sudo apt install -y python3-flask`
-2. Copiar `app.py` a `/opt/app/app.py` y `app.service` a
-   `/etc/systemd/system/app.service`.
-3. `sudo systemctl daemon-reload && sudo systemctl enable --now app`
-4. Verificar con `curl http://localhost/health` y `curl http://localhost/`.
-5. Prueba de reinicio: `sudo reboot` y, sin volver a entrar por SSH, comprobar
-   `curl http://<ip-publica-temporal>/health` desde fuera — confirma que
-   `Restart=always` y `enable` dejan la app funcionando sola tras un arranque en frío.
-6. `sudo apt clean` y crear la imagen (**Actions → Image → Create image**) con nombre
-   `ami-autoscaling-app-v1`.
+- **VPC** con subredes públicas y privadas
+- **Application Load Balancer (ALB)** con Target Group que apunta a las instancias del ASG
+- **Auto Scaling Group (ASG)** con mín 1 y máx 5 instancias (configurables)
+- **AMI personalizada** con app Flask (ver [Construcción de la AMI](#construcción-de-la-ami))
+- **EC2 para el controller** con rol IAM que permita CloudWatch + Auto Scaling (ver `docs/iam-policy-controller.json`)
+- **Región:** `us-east-1` (configurable en `controller.env`)
 
-### Cómo correr la app en local (para probarla antes de hornear la AMI)
+---
+
+## Quick start: compilar y ejecutar
+
+### 1. Clonar y navegar
 
 ```bash
-cd infra/app
-python3 -m venv .venv && source .venv/bin/activate   # opcional, recomendado
-pip install flask
-PORT=8080 python3 app.py
+git clone <repo-url>
+cd controller
 ```
 
-En otra terminal: `curl http://localhost:8080/` y `curl http://localhost:8080/health`.
-Sin `sudo`: el puerto 8080 no es privilegiado, a diferencia del 80 (que exige root, por
-eso `app.service` corre como `User=root`). `infra/app/.venv/` está en `.gitignore`.
+### 2. Instalar dependencias (primera vez)
+
+```bash
+# Instalar vcpkg (si no lo tienes)
+git clone https://github.com/Microsoft/vcpkg.git
+./vcpkg/bootstrap-vcpkg.sh
+
+# Instalar dependencias del proyecto
+./vcpkg/vcpkg install aws-sdk-cpp[monitoring,autoscaling]:x64-linux
+```
+
+### 3. Compilar
+
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build . -j4
+cd ..
+```
+
+### 4. Configurar variables de entorno
+
+```bash
+cp config/controller.env.example config/controller.env
+# Edita config/controller.env con los valores reales de tu cuenta AWS:
+#   - ASG_NAME
+#   - REGION
+#   - LOAD_BALANCER_DIM
+#   - TARGET_GROUP_DIM
+```
+
+### 5. Ejecutar
+
+```bash
+set -a; source config/controller.env; set +a
+./build/controller
+```
+
+El controller entra en un bucle infinito: cada 30 segundos consulta CloudWatch, y cada 60 segundos toma una decisión. Escribe sus logs en `logs/decisions.jsonl`.
 
 ---
 
+
+## Configuración
+
+Todas las variables están en `config/controller.env.example` (defaults) y se cargan de `config/controller.env` (que NO se versiona).
+
+### Variables obligatorias (sin default)
+
+| Variable | Ejemplo | Significado |
+|---|---|---|
+| `ASG_NAME` | `ASG-App` | Nombre del Auto Scaling Group |
+| `REGION` | `us-east-1` | Región AWS |
+| `LOAD_BALANCER_DIM` | `app/MI-ALB/abc123def456` | Dimensión del ALB en CloudWatch |
+| `TARGET_GROUP_DIM` | `targetgroup/MI-TG/xyz789abc123` | Dimensión del Target Group en CloudWatch |
+
+### Variables de decisión 
+
+| Variable | Default | Rango | Significado |
+|---|---|---|---|
+| `UMBRAL_ALTO` | 70.0 | 0-100 | CPU (%) → subir |
+| `UMBRAL_BAJO` | 30.0 | 0-100 | CPU (%) → bajar |
+| `MARGEN_BAJADA` | 10.0 | 0-100 | Holgura del chequeo n-1 |
+| `MA_VENTANA` | 3 | ≥1 | Muestras para media móvil de CPU |
+| `HOLT_ALPHA` | 0.5 | 0-1 | Respuesta rápida del nivel en Holt |
+| `HOLT_BETA` | 0.3 | 0-1 | Respuesta lenta de la tendencia en Holt |
+| `HORIZONTE_PERIODOS` | 3 | ≥1 | Minutos adelante que predice Holt |
+| `C_RPM` | 480.0 | >0 | Capacidad de 1 instancia (req/min) |
+| `MIN_CAPACITY` | 1 | ≥1 | Mínimo de instancias |
+| `MAX_CAPACITY` | 5 | ≥1 | Máximo de instancias |
+
+### Variables de control 
+
+| Variable | Default | Significado |
+|---|---|---|
+| `COOLDOWN_SUBIDA_SEG` | 120 | Espera mínima entre subidas |
+| `COOLDOWN_BAJADA_SEG` | 240 | Espera mínima entre bajadas (≥ 3×PERIOD_SEG+margen) |
+| `WARMUP_TIMEOUT_SEG` | 600 | Timeout si una instancia tarda en arrancar |
+| `PERIOD_SEG` | 60 | Período de las métricas en CloudWatch |
+| `POLL_INTERVAL_SEG` | 30 | Cada cuánto consulta CloudWatch |
+| `STATE_FILE` | `state/controller_state.json` | Dónde persiste el estado |
+| `LOG_FILE` | `logs/decisions.jsonl` | Dónde escribe el log |
+
+---
+
+## Cómo decide el controller
+
+### Decision Engine
+
+El **Decision Engine** orquesta un ciclo completo cada 60 segundos:
+
+1. **Leer métricas** de CloudWatch (CPU, RequestCount, HealthyHostCount)
+2. **Evaluar calidad** (¿datos completos y frescos?)
+3. **Calcular dos señales independientes** (reactiva y proactiva)
+4. **Combinar señales** (OR para subir, AND para bajar)
+5. **Aplicar guardas de seguridad** (cooldowns, límites, chequeo n-1)
+6. **Ejecutar SetDesiredCapacity** si corresponde
+7. **Registrar la decisión** en el log JSONL
+
+### Señal Reactiva 
+
+Responde a la **carga actual medida ahora**. Lee la CPU promedio del ASG de los últimos 3 minutos (media móvil de 3 muestras) y compara contra umbrales fijos: sube si MA_CPU > 70%, baja si MA_CPU < 30%, mantiene en cualquier otro caso. Es simple, rápida y defensiva: reacciona a picos reales. La media móvil filtra ruido de 1 minuto.
+
+### Señal Proactiva 
+
+Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) para aprender la tendencia del RequestCount total y proyecta la demanda 3 minutos adelante. Traduce ese pronóstico a instancias necesarias (pronóstico / 480 RPM por instancia). Emite UP si la demanda crecerá, pero solo si ese aumento es sostenido (últimos 3 minutos en tendencia creciente: evita picos aislados). Emite DOWN si detecta descenso sostenido de demanda.
+
+---
+
+## Métricas de CloudWatch
+
+| Métrica | Namespace | Dimensión | Stat | Período | Uso |
+|---|---|---|---|---|---|
+| `CPUUtilization` | `AWS/EC2` | `AutoScalingGroupName` | Average | 60s | Señal reactiva |
+| `RequestCount` | `AWS/ApplicationELB` | `LoadBalancer` | Sum | 60s | Señal proactiva (Holt) |
+| `HealthyHostCount` | `AWS/ApplicationELB` | `LoadBalancer` + `TargetGroup` | Average | 60s | Confirmación de capacidad real |
+
+---
+
+
+## Documentación adicional
+
+### Dentro del repo
+
+- **`infra/app/app.py`**: App Flask que corre en las instancias del ASG (genera carga y health endpoint)
+- **`infra/app/app.service`**: Systemd para la app
+- **`infra/controller.service`**: Systemd para el controller
+- **`docs/iam-policy-controller.json`**: Política IAM recomendada (reemplazar REGION/ACCOUNT_ID)
+- **`loadtest/scenarios/escenario_completo.csv`**: Perfil de carga: 7 fases (base, pico, recuperación, rampa, meseta, bajada, reposo)
+
+---
+
+## Diagramas de arquitectura
+
+### Flujo del ciclo de control
+
+```mermaid
+flowchart TD
+    A["1. Leer métricas<br/>CPU, RequestCount, HealthyHostCount"] --> B["2. Evaluar calidad<br/>¿Son datos completos y frescos?"]
+    B --> C["3. Calcular dos señales<br/>Reactiva + Proactiva"]
+    C --> D["4. Combinar señales<br/>+ revisar guardas de seguridad"]
+    D --> E["5. Actuar y registrar<br/>SetDesiredCapacity + log"]
+    E -.->|"60 segundos después"| A
+ 
+    style A fill:#e7f1ff,stroke:#4a90d9
+    style B fill:#e7f1ff,stroke:#4a90d9
+    style C fill:#e8e0ff,stroke:#6b4fd6
+    style D fill:#e8e0ff,stroke:#6b4fd6
+    style E fill:#d4edda,stroke:#28a745
+```
+
+### Señal Reactiva
+
+```mermaid
+flowchart TD
+    R0["Cada 60 segundos<br/>CloudWatch publica CPU promedio del ASG"]
+    R0 --> R1["Se guardan los últimos<br/>3 valores de CPU"]
+    R1 --> R2{"¿Ya hay 3 valores<br/>en el historial?"}
+
+    R2 -->|No| RHOLD0["⏸ HOLD<br/>No cambiar capacidad<br/>Todavía no hay suficiente historia"]
+    R2 -->|Sí| R3["Calcular MA3 = promedio<br/>de los últimos 3 minutos"]
+
+    R3 --> R4{"¿MA3 > UMBRAL_ALTO<br/>70%?"}
+    R4 -->|Sí| RUP["🔼 UP<br/>La CPU está muy alta<br/>Pedir más instancias"]
+    R4 -->|No| R5{"¿MA3 < UMBRAL_BAJO<br/>30%?"}
+
+    R5 -->|Sí| RDOWN["🔽 DOWN<br/>La CPU está muy baja<br/>Se puede quitar instancias"]
+    R5 -->|No| RHOLD["⏸ HOLD<br/>La CPU está en zona segura<br/>Mantener capacidad"]
+
+    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
+    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
+    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px
+    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px
+
+    class R0 metric
+    class R1,R3 calc
+    class RUP up
+    class RDOWN down
+    class RHOLD,RHOLD0 hold
+```
+
+### Señal Proactiva (Holt)
+
+```mermaid
+flowchart TD
+    P0["Cada 60 segundos<br/>CloudWatch publica RequestCount total del ALB"]
+    P0 --> P1["Actualizar modelo Holt:<br/>Nivel (demanda actual suavizada)<br/>+ Tendencia (velocidad de cambio)"]
+
+    P1 --> P2{"¿Hay suficiente<br/>historia?<br/>2+ datos"}
+
+    P2 -->|No| PHOLD0["⏸ HOLD<br/>No cambiar capacidad<br/>Todavía no hay suficiente historia"]
+
+    P2 -->|Sí| P3["Proyectar la demanda<br/>de los próximos 3 minutos<br/>usando Nivel + 3×Tendencia"]
+
+    P3 --> P4["Calcular cuántas instancias<br/>se necesitarían:<br/>instancias = techo(pronóstico / 480 RPM)"]
+
+    P4 --> P5{"¿Necesarias > actuales<br/>(InService+Pending)?"}
+
+    P5 -->|Sí| P6{"¿La demanda ha subido<br/>de forma sostenida<br/>en los últimos 3 minutos?"}
+
+    P6 -->|Sí| PUP["🔼 UP<br/>Anticipar más capacidad<br/>para la demanda esperada"]
+    P6 -->|No| PHOLD1["⏸ HOLD<br/>Ignorar pico aislado<br/>Esperar a confirmar tendencia"]
+
+    P5 -->|No| P7{"¿Necesarias < actuales?"}
+
+    P7 -->|Sí| PDOWN["🔽 DOWN<br/>Se proyecta capacidad sobrante<br/>en los próximos minutos"]
+    P7 -->|No| PHOLD2["⏸ HOLD<br/>La demanda proyectada<br/>coincide con capacidad"]
+
+    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
+    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
+    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px
+    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px
+
+    class P0 metric
+    class P1,P3,P4 calc
+    class PUP up
+    class PDOWN down
+    class PHOLD0,PHOLD1,PHOLD2 hold
+```
+
+### Combinación de señales y guardas
+
+```mermaid
+flowchart TD
+    START["Señal Reactiva: {UP/DOWN/HOLD}<br/>Señal Proactiva: {UP/DOWN/HOLD}"] --> Q1{"¿Alguna de las dos<br/>dice SUBIR?"}
+    
+    Q1 -->|No| Q2{"¿Las DOS dicen<br/>BAJAR?"}
+    Q1 -->|Sí| G1["Evaluar guardas de subida:<br/>• Dato completo y fresco<br/>• No estamos en máximo (5)<br/>• ≥120 seg desde última subida<br/>• Sin instancias Pending bloqueadas"]
+    
+    G1 --> G1R{"¿Todas<br/>pasan?"}
+    G1R -->|Sí| UP["✅ SUBE 1 instancia"]
+    G1R -->|No| WAIT1["⏸ Se mantiene igual<br/>Motivo guardado en log"]
+    
+    Q2 -->|Sí| G2["Evaluar guardas de bajada:<br/>• Dato completo y frescos<br/>• No estamos en mínimo (1)<br/>• n confirmado por HealthyHostCount<br/>• ≥240 seg desde última acción<br/>• CPU proyectada < 60%<br/>• Demanda/instancia < 480 RPM"]
+    
+    G2 --> G2R{"¿Todas<br/>pasan?"}
+    G2R -->|Sí| DOWN["✅ BAJA 1 instancia"]
+    G2R -->|No| WAIT2["⏸ Se mantiene igual<br/>Motivo guardado en log"]
+    
+    Q2 -->|No| WAIT3["⏸ Se mantiene igual<br/>Señales no de acuerdo"]
+    
+    style UP fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style DOWN fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style WAIT1 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
+    style WAIT2 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
+    style WAIT3 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
+    style G1 fill:#e8f5e9,stroke:#4caf50
+    style G2 fill:#ffebee,stroke:#e53935
+    style START fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
+```
+
+---
+
+## Construcción de la AMI
+
+La app de las instancias del ASG se crea una sola vez en una **AMI propia** (`ami-autoscaling-app-v1`), evitando que cada instancia tenga que instalar dependencias en el arranque.
+
+### Procedimiento
+
+1. Lanzar instancia temporal: Ubuntu 24.04 LTS, t2.micro, en una subred pública
+2. Conectar por SSH y ejecutar:
+   ```bash
+   sudo apt update && sudo apt install -y python3-flask
+   ```
+3. Copiar archivos:
+   ```bash
+   sudo mkdir -p /opt/app
+   sudo cp infra/app/app.py /opt/app/app.py
+   sudo cp infra/app/app.service /etc/systemd/system/app.service
+   ```
+4. Habilitar y arrancar:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now app
+   ```
+5. Verificar:
+   ```bash
+   curl http://localhost/health    # → "ok"
+   curl http://localhost/          # → "ok {número}" (genera CPU)
+   ```
+6. Prueba de persistencia (reiniciar sin volver a entrar por SSH):
+   ```bash
+   sudo reboot
+   # Desde fuera: curl http://<ip-publica>/health → confirma que arranca solo
+   ```
+7. Limpiar y crear imagen:
+   ```bash
+   sudo apt clean
+   # AWS Console: Actions → Image → Create image
+   # Nombre: ami-autoscaling-app-v1
+   ```
+
+---

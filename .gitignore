@@ -50,4 +50,5 @@ Thumbs.db
 vcpkg/
 
 # Resultados de pruebas de carga
-results/
+results/tests/
+scripts/
