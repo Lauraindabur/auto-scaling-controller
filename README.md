@@ -257,20 +257,20 @@ flowchart TD
     class PHOLD0,PHOLD1,PHOLD2 hold
 ```
 
-### Combinación de señales y guardas
+### Combinación de señales y safetyguards
 
 ```mermaid
 flowchart TD
     START["Señal Reactiva: {UP/DOWN/HOLD}<br/>Señal Proactiva: {UP/DOWN/HOLD}"] --> Q1{"¿Alguna de las dos<br/>dice SUBIR?"}
     
     Q1 -->|No| Q2{"¿Las DOS dicen<br/>BAJAR?"}
-    Q1 -->|Sí| G1["Evaluar guardas de subida:<br/>• Dato completo y fresco<br/>• No estamos en máximo (5)<br/>• ≥120 seg desde última subida<br/>• Sin instancias Pending bloqueadas"]
+    Q1 -->|Sí| G1["Evaluar safetygurads:<br/>• Dato completo y fresco<br/>• No estamos en máximo (5)<br/>• ≥120 seg desde última subida<br/>• Sin instancias Pending bloqueadas"]
     
     G1 --> G1R{"¿Todas<br/>pasan?"}
     G1R -->|Sí| UP[" SUBE 1 instancia"]
     G1R -->|No| WAIT1["⏸ Se mantiene igual<br/>Motivo guardado en log"]
     
-    Q2 -->|Sí| G2["Evaluar guardas de bajada:<br/>• Dato completo y frescos<br/>• No estamos en mínimo (1)<br/>• n confirmado por HealthyHostCount<br/>• ≥240 seg desde última acción<br/>• CPU proyectada < 60%<br/>• Demanda/instancia < 480 RPM"]
+    Q2 -->|Sí| G2["Evaluar safetyguards de bajada:<br/>• Dato completo y frescos<br/>• No estamos en mínimo (1)<br/>• n confirmado por HealthyHostCount<br/>• ≥240 seg desde última acción<br/>• CPU proyectada < 60%<br/>• Demanda/instancia < 480 RPM"]
     
     G2 --> G2R{"¿Todas<br/>pasan?"}
     G2R -->|Sí| DOWN[" BAJA 1 instancia"]
