@@ -114,7 +114,7 @@ Todas las variables están en `config/controller.env.example` (defaults) y se ca
 | `HOLT_ALPHA` | 0.5 | 0-1 | Respuesta rápida del nivel en Holt |
 | `HOLT_BETA` | 0.3 | 0-1 | Respuesta lenta de la tendencia en Holt |
 | `HORIZONTE_PERIODOS` | 3 | ≥1 | Minutos adelante que predice Holt |
-| `C_RPM` | 480.0 | >0 | Capacidad de 1 instancia (req/min) |
+| `C_RPM` | 300.0 | >0 | Capacidad de 1 instancia (req/min) |
 | `MIN_CAPACITY` | 1 | ≥1 | Mínimo de instancias |
 | `MAX_CAPACITY` | 5 | ≥1 | Máximo de instancias |
 
@@ -140,7 +140,7 @@ Responde a la **carga actual medida ahora**. Lee la CPU promedio del ASG de los 
 
 ### Señal Proactiva 
 
-Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) para aprender la tendencia del RequestCount total y proyecta la demanda 3 minutos adelante. Traduce ese pronóstico a instancias necesarias (pronóstico / 480 RPM por instancia). Emite UP si la demanda crecerá, pero solo si ese aumento es sostenido (últimos 3 minutos en tendencia creciente: evita picos aislados). Emite DOWN si detecta descenso sostenido de demanda.
+Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) para aprender la tendencia del RequestCount total y proyecta la demanda 3 minutos adelante. Traduce ese pronóstico a instancias necesarias (pronóstico / 300 RPM por instancia). Emite UP si la demanda crecerá, pero solo si ese aumento es sostenido (últimos 3 minutos en tendencia creciente: evita picos aislados). Emite DOWN si detecta descenso sostenido de demanda.
 
 ---
 
@@ -172,13 +172,13 @@ Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) p
 ### Flujo del ciclo de control
 
 ```mermaid
-flowchart TD
-    A["1. Leer métricas<br/>CPU, RequestCount, HealthyHostCount"] --> B["2. Evaluar calidad<br/>¿Son datos completos y frescos?"]
-    B --> C["3. Calcular dos señales<br/>Reactiva + Proactiva"]
-    C --> D["4. Combinar señales<br/>+ revisar guardas de seguridad"]
-    D --> E["5. Actuar y registrar<br/>SetDesiredCapacity + log"]
-    E -.->|"60 segundos después"| A
- 
+flowchart TB
+    A["1. Leer métricas<br>CPU, RequestCount, HealthyHostCount"] --> B["2. Evaluar calidad<br>¿Son datos completos y frescos?"]
+    B --> C["3. Calcular dos señales<br>Reactiva + Proactiva"]
+    C --> D["4. Combinar señales<br>+ revisar guardas de seguridad"]
+    D --> E["5. Actuar y registrar<br>SetDesiredCapacity + log"]
+    E -. 60 segundos después .-> A
+
     style A fill:#e7f1ff,stroke:#4a90d9
     style B fill:#e7f1ff,stroke:#4a90d9
     style C fill:#e8e0ff,stroke:#6b4fd6
@@ -202,7 +202,7 @@ flowchart TD
     R4 -->|No| R5{"¿MA3 < UMBRAL_BAJO<br/>30%?"}
 
     R5 -->|Sí| RDOWN[" DOWN<br/>La CPU está muy baja<br/>Se puede quitar instancias"]
-    R5 -->|No| RHOLD["⏸ HOLD<br/>La CPU está en zona segura<br/>Mantener capacidad"]
+    R5 -->|No| RHOLD["HOLD<br/>La CPU está en zona segura<br/>Mantener capacidad"]
 
     classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
     classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
@@ -220,72 +220,60 @@ flowchart TD
 ### Señal Proactiva (Holt)
 
 ```mermaid
-flowchart TD
-    P0["Cada 60 segundos<br/>CloudWatch publica RequestCount total del ALB"]
-    P0 --> P1["Actualizar modelo Holt:<br/>Nivel (demanda actual suavizada)<br/>+ Tendencia (velocidad de cambio)"]
+flowchart TB
+    P0["Cada 60 segundos<br>CloudWatch publica RequestCount total del ALB"] --> P1["Actualizar modelo Holt:<br>Nivel (demanda actual suavizada)<br>+ Tendencia (velocidad de cambio)"]
+    P1 --> P2{"¿Hay suficiente<br>historia?<br>2+ datos"}
+    P2 -- No --> PHOLD0[" HOLD<br>No cambiar capacidad<br>Todavía no hay suficiente historia"]
+    P2 -- Sí --> P3["Proyectar la demanda<br>de los próximos 3 minutos<br>usando Nivel + 3×Tendencia"]
+    P3 --> P4["Calcular cuántas instancias<br>se necesitarían:<br>instancias = techo(pronóstico / 300 RPM)"]
+    P4 --> P5{"¿Necesarias &gt; actuales<br>(InService+Pending)?"}
+    P5 -- Sí --> P6{"¿La demanda ha subido<br>de forma sostenida<br>en los últimos 3 minutos?"}
+    P6 -- Sí --> PUP["UP<br>Anticipar más capacidad<br>para la demanda esperada"]
+    P6 -- No --> PHOLD1[" HOLD<br>Ignorar pico aislado<br>Esperar a confirmar tendencia"]
+    P5 -- No --> P7{"¿Necesarias &lt; actuales?"}
+    P7 -- Sí --> PDOWN["DOWN<br>Se proyecta capacidad sobrante<br>en los próximos minutos"]
+    P7 -- No --> PHOLD2[" HOLD<br>La demanda proyectada<br>coincide con capacidad"]
 
-    P1 --> P2{"¿Hay suficiente<br/>historia?<br/>2+ datos"}
-
-    P2 -->|No| PHOLD0["⏸ HOLD<br/>No cambiar capacidad<br/>Todavía no hay suficiente historia"]
-
-    P2 -->|Sí| P3["Proyectar la demanda<br/>de los próximos 3 minutos<br/>usando Nivel + 3×Tendencia"]
-
-    P3 --> P4["Calcular cuántas instancias<br/>se necesitarían:<br/>instancias = techo(pronóstico / 480 RPM)"]
-
-    P4 --> P5{"¿Necesarias > actuales<br/>(InService+Pending)?"}
-
-    P5 -->|Sí| P6{"¿La demanda ha subido<br/>de forma sostenida<br/>en los últimos 3 minutos?"}
-
-    P6 -->|Sí| PUP[" UP<br/>Anticipar más capacidad<br/>para la demanda esperada"]
-    P6 -->|No| PHOLD1["⏸ HOLD<br/>Ignorar pico aislado<br/>Esperar a confirmar tendencia"]
-
-    P5 -->|No| P7{"¿Necesarias < actuales?"}
-
-    P7 -->|Sí| PDOWN[" DOWN<br/>Se proyecta capacidad sobrante<br/>en los próximos minutos"]
-    P7 -->|No| PHOLD2["⏸ HOLD<br/>La demanda proyectada<br/>coincide con capacidad"]
-
+     P0:::metric
+     P1:::calc
+     PHOLD0:::hold
+     P3:::calc
+     P4:::calc
+     PUP:::up
+     PHOLD1:::hold
+     PDOWN:::down
+     PHOLD2:::hold
     classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
     classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
     classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
     classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px
     classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px
-
-    class P0 metric
-    class P1,P3,P4 calc
-    class PUP up
-    class PDOWN down
-    class PHOLD0,PHOLD1,PHOLD2 hold
 ```
 
 ### Combinación de señales y safetyguards
 
 ```mermaid
-flowchart TD
-    START["Señal Reactiva: {UP/DOWN/HOLD}<br/>Señal Proactiva: {UP/DOWN/HOLD}"] --> Q1{"¿Alguna de las dos<br/>dice SUBIR?"}
-    
-    Q1 -->|No| Q2{"¿Las DOS dicen<br/>BAJAR?"}
-    Q1 -->|Sí| G1["Evaluar safetygurads:<br/>• Dato completo y fresco<br/>• No estamos en máximo (5)<br/>• ≥120 seg desde última subida<br/>• Sin instancias Pending bloqueadas"]
-    
-    G1 --> G1R{"¿Todas<br/>pasan?"}
-    G1R -->|Sí| UP[" SUBE 1 instancia"]
-    G1R -->|No| WAIT1["⏸ Se mantiene igual<br/>Motivo guardado en log"]
-    
-    Q2 -->|Sí| G2["Evaluar safetyguards de bajada:<br/>• Dato completo y frescos<br/>• No estamos en mínimo (1)<br/>• n confirmado por HealthyHostCount<br/>• ≥240 seg desde última acción<br/>• CPU proyectada < 60%<br/>• Demanda/instancia < 480 RPM"]
-    
-    G2 --> G2R{"¿Todas<br/>pasan?"}
-    G2R -->|Sí| DOWN[" BAJA 1 instancia"]
-    G2R -->|No| WAIT2["⏸ Se mantiene igual<br/>Motivo guardado en log"]
-    
-    Q2 -->|No| WAIT3["⏸ Se mantiene igual<br/>Señales no de acuerdo"]
-    
+flowchart TB
+    START["Señal Reactiva: UP/DOWN/HOLD<br><br>Señal Proactiva: UP/DOWN/HOLD"] --> Q1{"¿Alguna de las dos<br>dice SUBIR?"}
+    Q1 -- No --> Q2{"¿Las DOS dicen<br>BAJAR?"}
+    Q1 -- Sí --> G1["Evaluar safetygurads:<br>• Dato completo • No estamos en máximo (5)<br>• ≥120 seg desde última subida<br>• Sin instancias Pending bloqueadas"]
+    G1 --> G1R{"¿Todas<br>pasan?"}
+    G1R -- Sí --> UP["SUBE 1 instancia"]
+    G1R -- No --> WAIT1["`**HOLD** Se mantiene igual<br>Motivo guardado en log`"]
+    Q2 -- Sí --> G2["Evaluar safetyguards de bajada:<br>• Dato completo y frescos<br>• No estamos en mínimo (1)<br>• n confirmado por HealthyHostCount<br>• ≥240 seg desde última acción<br>• CPU proyectada &lt; 60%<br>• Demanda/instancia &lt; 300 RPM"]
+    G2 --> G2R{"¿Todas<br>pasan?"}
+    G2R -- Sí --> DOWN["`**BAJA** 1 instancia`"]
+    G2R -- No --> WAIT2["`**HOLD** Se mantiene igual<br>Motivo guardado en log`"]
+    Q2 -- No --> WAIT3["`**HOLD** Se mantiene igual<br>Señales no de acuerdo`"]
+
+    style START fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
+    style G1 fill:#e8f5e9,stroke:#4caf50
     style UP fill:#d4edda,stroke:#28a745,stroke-width:2px
-    style DOWN fill:#d4edda,stroke:#28a745,stroke-width:2px
     style WAIT1 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
+    style G2 fill:#ffebee,stroke:#e53935
+    style DOWN fill:#d4edda,stroke:#28a745,stroke-width:2px
     style WAIT2 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
     style WAIT3 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
-    style G1 fill:#e8f5e9,stroke:#4caf50
-    style G2 fill:#ffebee,stroke:#e53935
-    style START fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
 ```
 
 ---
