@@ -118,18 +118,6 @@ Todas las variables están en `config/controller.env.example` (defaults) y se ca
 | `MIN_CAPACITY` | 1 | ≥1 | Mínimo de instancias |
 | `MAX_CAPACITY` | 5 | ≥1 | Máximo de instancias |
 
-### Variables de control 
-
-| Variable | Default | Significado |
-|---|---|---|
-| `COOLDOWN_SUBIDA_SEG` | 120 | Espera mínima entre subidas |
-| `COOLDOWN_BAJADA_SEG` | 240 | Espera mínima entre bajadas (≥ 3×PERIOD_SEG+margen) |
-| `WARMUP_TIMEOUT_SEG` | 600 | Timeout si una instancia tarda en arrancar |
-| `PERIOD_SEG` | 60 | Período de las métricas en CloudWatch |
-| `POLL_INTERVAL_SEG` | 30 | Cada cuánto consulta CloudWatch |
-| `STATE_FILE` | `state/controller_state.json` | Dónde persiste el estado |
-| `LOG_FILE` | `logs/decisions.jsonl` | Dónde escribe el log |
-
 ---
 
 ## Cómo decide el controller
