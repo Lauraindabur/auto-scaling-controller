@@ -7,7 +7,7 @@ Controlador de autoescalado horizontal en C++ para ejecutarse como un proceso co
 ## Tabla de contenidos
 
 1. [Requisitos previos](#requisitos-previos)
-2. [Quick start: compilar y ejecutar](#quick-start-compilar-y-ejecutar)
+2. [Quick start para compilar y ejecutar](#quick-start-compilar-y-ejecutar)
 3. [Configuración](#configuración)
 4. [Cómo decide el controller](#cómo-decide-el-controller)
 5. [Métricas de CloudWatch](#métricas-de-cloudwatch)
