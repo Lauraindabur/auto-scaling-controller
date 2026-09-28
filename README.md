@@ -189,9 +189,6 @@ Corridas versionadas en el repo:
 | `20260926T154709Z` | [results/k6-escenario/20260926T154709Z/timeline.png](results/k6-escenario/20260926T154709Z/timeline.png) |
 | `20260926T173635Z` | [results/k6-escenario/20260926T173635Z/timeline.png](results/k6-escenario/20260926T173635Z/timeline.png) |
 
-Nota: estas 2 corridas usaron el perfil de debug `test_probar_reactivo.csv` (~8 min cada una),
-no el escenario completo de 7 fases (~53 min). Sirven para validar el pipeline de resultados;
-la corrida del escenario completo contra AWS real queda pendiente.
 
 ---
 
