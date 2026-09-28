@@ -11,11 +11,12 @@ Controlador de autoescalado horizontal en C++ para ejecutarse como un proceso co
 3. [Configuración](#configuración)
 4. [Cómo decide el controller](#cómo-decide-el-controller)
 5. [Métricas de CloudWatch](#métricas-de-cloudwatch)
-6. [Documentación adicional](#documentación-adicional)
-7. [Resultados](#resultados)
-8. [Diagramas de arquitectura](#diagramas-de-arquitectura)
-9. [Construcción de la AMI](#construcción-de-la-ami)
-10. [Referencias](#referencias)
+6. [Persistencia de estado](#persistencia-de-estado)
+7. [Documentación adicional](#documentación-adicional)
+8. [Resultados](#resultados)
+9. [Diagramas de arquitectura](#diagramas-de-arquitectura)
+10. [Construcción de la AMI](#construcción-de-la-ami)
+11. [Referencias](#referencias)
 
 ---
 
@@ -155,6 +156,47 @@ Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) p
 
 ---
 
+## Persistencia de estado
+
+### Para qué existe
+
+El controlador acumula memoria entre ciclos: la ventana de CPU de la media móvil, el nivel y la tendencia del modelo de Holt, los últimos valores de demanda y las marcas de tiempo de la última subida y bajada. Sin esa memoria, un reinicio obligaría a esperar varios minutos de historial antes de decidir con normalidad y haría que los cooldowns se perdieran. La clase `StateStore` guarda ese estado en disco y lo recupera al arrancar.
+
+### Qué se guarda
+
+| Elemento | Usado por |
+|---|---|
+| Timestamp del último dato procesado | Evitar procesar dos veces el mismo minuto |
+| Ventana de CPU (media móvil) | Señal reactiva |
+| Nivel, tendencia y primer valor de Holt | Señal proactiva |
+| Últimos 3 valores de RequestCount | Guarda anti-picos |
+| Timestamp de la última subida y de la última bajada | Cooldowns |
+
+El timestamp de inicio de warm-up no se persiste a propósito: es un estado efímero que se reconstruye en el primer ciclo a partir de las instancias Pending.
+
+### Cómo funciona
+
+1. Al final de cada ciclo, el controlador entrega su estado a `StateStore`, que lo escribe en `state/controller_state.json`.
+2. La escritura es atómica: se escribe primero un archivo temporal y luego se renombra, para que el archivo nunca quede corrupto si el proceso se interrumpe a mitad de la escritura.
+3. Al arrancar, `main.cpp` carga ese archivo y restaura cada componente antes de iniciar el bucle.
+4. Si el archivo no existe o está corrupto, `StateStore` devuelve un estado vacío y el controlador arranca en frío, sin fallar.
+
+### Reinicio automático
+
+`infra/controller.service` define `Restart=always`, de modo que systemd vuelve a arrancar el proceso si termina de forma inesperada. Combinado con la persistencia de estado, el controlador retoma su operación sin intervención manual.
+
+### Dónde verlo en el repositorio
+
+| Qué | Dónde |
+|---|---|
+| Implementación | `include/StateStore.hpp` y `src/StateStore.cpp` |
+| Carga y restauración al arrancar | `src/main.cpp` |
+| Guardado al final de cada ciclo | `include/DecisionEngine.hpp` |
+| Reinicio automático del proceso | `infra/controller.service` |
+| Pruebas unitarias | `tests/test_state_store.cpp` |
+| Ubicación del archivo de estado | Variable `STATE_FILE` en `config/controller.env` (por defecto `state/controller_state.json`, ignorado por git) |
+
+---
 
 ## Documentación adicional
 
