@@ -2,22 +2,25 @@
 #include <string>
 #include <aws/autoscaling/AutoScalingClient.h>
 
+using namespace std;
+
+// Resultado de pedirle un cambio de capacidad a AWS
+// si funcionó y, si no, por que.
 struct ResultadoAccion {
     bool exito;
-    std::string mensaje;   // motivo del error, o "OK" si exito es true
+    string mensaje;
 };
 
-// SetDesiredCapacity sobre el ASG (seccion 4.9), con HonorCooldown=false porque el
-// cooldown es nuestro. Los limites [MIN, MAX] y el paso ±1 ya los aplico el combinador
-// antes de llegar aqui: el actuador solo ejecuta.
+// Ejecuta en AWS la capacidad que ya decidio el controller  con SetDesiredCapacity sobre el ASG.
+// No valida nada-> el numero que recibe ya viene entre el minimo (1) y el maximo (5) de instancias.
+
 class ASGActuator {
 public:
-    ASGActuator(std::string asgName, const std::string& region);
+    ASGActuator(string asgName, const string& region);
 
-    // desired ABSOLUTO, ya calculado por el combinador (Veredicto::desiredObjetivo).
     ResultadoAccion fijarCapacidad(int desired);
 
 private:
-    std::string asgName_;
+    string asgName_;
     Aws::AutoScaling::AutoScalingClient asClient_;
 };

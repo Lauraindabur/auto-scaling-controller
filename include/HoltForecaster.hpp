@@ -2,24 +2,19 @@
 #include <algorithm>
 #include <optional>
 
-// Holt (double exponential smoothing): suaviza nivel y tendencia, sin componente
-// estacional. Se aplica al RequestCount TOTAL del ALB en peticiones por minuto.
-//
-// Se usa el total y no RequestCountPerTarget porque el per-target cambia al cambiar el
-// numero de instancias: la serie reaccionaria a las decisiones del propio controller y
-// el pronostico dejaria de representar la demanda.
+using namespace std;
+
+// Holt -> suaviza nivel y tendencia, lo aplicamos al RequestCount TOTAL del ALB en peticiones cada 60seg.
 class HoltForecaster {
 public:
     HoltForecaster(double alpha, double beta) : alpha_(alpha), beta_(beta) {}
-
+    // como el primervalor no nos yauda a estimar tendencia solo se guarda, el 2do arranca el modelo con L = x2 y T = x2 - x1. A partir de ahi se aplica la formula de Holt.
     void observar(double x) {
-        // 1er dato: no alcanza para estimar una tendencia, solo se guarda.
         if (!primerValor_.has_value()) {
             primerValor_ = x;
             return;
         }
-        // 2o dato: arranca el modelo con L = x2 y T = x2 - x1.
-        if (!inicializado_) {
+        if (!inicializado_) {  //2do dato
             nivel_ = x;
             tendencia_ = x - *primerValor_;
             inicializado_ = true;
@@ -30,25 +25,23 @@ public:
         tendencia_ = beta_ * (nivel_ - nivelAnterior) + (1.0 - beta_) * tendencia_;
     }
 
-    // Mientras sea false el pronostico no significa nada y quien llama debe mantener.
+    // Siempre q retorne false el pronostico no significa nada y quien llama debe MANTAIN.
     bool inicializado() const { return inicializado_; }
 
     double nivel() const { return nivel_; }
     double tendencia() const { return tendencia_; }
 
-    // x̂ = max(0, L + h*T). Una tendencia a la baja pronunciada da un valor negativo,
-    // que como demanda no significa nada: se recorta en 0.
     double pronostico(int horizonte) const {
         if (!inicializado_) return 0.0;
-        return std::max(0.0, nivel_ + horizonte * tendencia_);
+        return max(0.0, nivel_ + horizonte * tendencia_);
     }
 
-    // --- Persistencia (StateStore) ---
+    // struc para persistencia, usada por statestore se guarda la persistencia del holt
     struct Estado {
         bool inicializado = false;
         double nivel = 0.0;
         double tendencia = 0.0;
-        std::optional<double> primerValor;   // presente si se vio 1 dato pero aun no 2
+        optional<double> primerValor;   
     };
 
     Estado estado() const { return {inicializado_, nivel_, tendencia_, primerValor_}; }
@@ -66,5 +59,5 @@ private:
     bool inicializado_ = false;
     double nivel_ = 0.0;
     double tendencia_ = 0.0;
-    std::optional<double> primerValor_;
+    optional<double> primerValor_;
 };

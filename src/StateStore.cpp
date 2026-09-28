@@ -11,10 +11,6 @@ using namespace std;
 
 namespace {
 
-// --- Escritura: helpers minimos, en el mismo estilo que Logger.cpp (sin libreria JSON). ---
-
-// Formato corto (no to_string, que fuerza 6 decimales): mas legible al inspeccionar el
-// archivo a mano, y el parser de abajo entiende cualquiera de las dos formas igual.
 string numOJson(optional<double> v) {
     if (!v) return "null";
     ostringstream oss; oss << *v; return oss.str();

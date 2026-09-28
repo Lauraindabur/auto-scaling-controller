@@ -12,10 +12,11 @@
 #include "SafetyGuards.hpp"
 #include "StateStore.hpp"
 
-// Orquesta un ciclo completo: fuente -> calidad -> politicas -> guardas -> combinador ->
-// actuador -> log -> guardar estado. Las politicas y las guardas se reciben ya construidas
-// (y, en un reinicio, ya restauradas via su propio restaurar()): el engine no las crea ni
-// decide como se recalientan, solo las usa.
+using namespace std;
+
+// Orquesta un ciclo completo -> pide el dato a CloudWatch, evalua su calidad, actualiza las
+// politicas, corre las safetyguards y el combinador, ejecuta la decision en el ASG y la deja
+// registrada en el log y en el estado guardado.
 class DecisionEngine {
 public:
     DecisionEngine(const Config& cfg, CloudWatchMetricSource& metrics, ASGActuator& actuator,
@@ -26,22 +27,16 @@ public:
           stateStore_(stateStore), holt_(holt), reactiva_(reactiva), proactiva_(proactiva),
           guardas_(guardas), combinador_(combinador) {}
 
-    // Retoma un estado cargado de StateStore: el ultimo dato procesado y los timestamps
-    // de cooldown. La ventana de la MA, el estado de Holt y la ventana de la guarda de
-    // picos se restauran aparte, directamente sobre reactiva/holt/proactiva (mismo patron
-    // restaurar() que ya usa cada politica), antes de construir este DecisionEngine.
+    // Se retoma un estado cargado de StateStore -> el ultimo dato procesado y sus estados
     void restaurar(const EstadoControlador& e) {
         tsUltimoProcesado_ = e.tsUltimoDatoProcesado;
         estadoGuardas_.tsUltimaSubida = e.tsUltimaSubida;
         estadoGuardas_.tsUltimaBajada = e.tsUltimaBajada;
-        // tsWarmupDesde no se restaura: es estado efimero (seccion StateStore.hpp).
     }
 
-    // true si habia un periodo nuevo de CloudWatch y se proceso un ciclo completo (se
-    // escribio una linea de log). false si no habia dato nuevo (seccion 4.3): ni se
-    // actualizan las politicas ni se escribe nada.
+    // true -> se procesó un ciclo completo y se escribió en logs, false si no hay dato nuevo 
     bool procesarSiHayDatoNuevo(DataTs tsReloj) {
-        std::optional<MetricSnapshot> snapshot = metrics_.ultimoPeriodoCompleto();
+        optional<MetricSnapshot> snapshot = metrics_.ultimoPeriodoCompleto();
         if (!snapshot.has_value()) return false;
         if (tsUltimoProcesado_.has_value() && snapshot->dataTs <= *tsUltimoProcesado_) return false;
 
@@ -68,8 +63,7 @@ private:
         reg.pending = s.pending;
         reg.horizon = cfg_.horizontePeriodos;
 
-        // Solo un dato COMPLETO alimenta las politicas: un ciclo incompleto no debe
-        // contaminar la MA ni la tendencia de Holt con basura (seccion 4.6).
+        // Acá solo un dato COMPLETO alimenta las politicas, si hay un ciclo incomplto no entra al MA 
         if (cal.completo()) {
             reactiva_.observar(*s.cpu);
             proactiva_.observar(*cal.requestCountEfectivo);
@@ -101,16 +95,14 @@ private:
         reg.justification = v.justificacion;
 
         if (v.decision == Decision::INCREASE_CAPACITY || v.decision == Decision::REDUCE_CAPACITY) {
-            reg.actionRequested = "SetDesiredCapacity " + std::to_string(s.desired.value_or(0))
-                                  + "->" + std::to_string(v.desiredObjetivo);
+            reg.actionRequested = "SetDesiredCapacity " + to_string(s.desired.value_or(0))
+                                  + "->" + to_string(v.desiredObjetivo);
             const ResultadoAccion r = actuator_.fijarCapacidad(v.desiredObjetivo);
             if (r.exito) {
                 reg.actionResult = "OK";
                 if (v.decision == Decision::INCREASE_CAPACITY) estadoGuardas_.tsUltimaSubida = s.dataTs;
                 else estadoGuardas_.tsUltimaBajada = s.dataTs;
             } else {
-                // No se toca ni tsUltimaSubida ni tsUltimaBajada: el fallo no cuenta como
-                // accion, asi que el siguiente ciclo puede reintentar sin esperar cooldown.
                 reg.actionResult = "ERROR: " + r.mensaje;
             }
         }
@@ -147,6 +139,6 @@ private:
     SafetyGuards& guardas_;
     DecisionCombiner& combinador_;
 
-    std::optional<DataTs> tsUltimoProcesado_;
+    optional<DataTs> tsUltimoProcesado_;
     EstadoGuardas estadoGuardas_;
 };

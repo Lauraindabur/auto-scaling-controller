@@ -52,3 +52,6 @@ vcpkg/
 # Resultados de pruebas de carga
 results/tests/
 scripts/
+
+# Tests unitarios
+tests/

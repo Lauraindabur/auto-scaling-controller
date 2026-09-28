@@ -4,24 +4,16 @@
 #include <string>
 #include <vector>
 
-// Tipos compartidos por toda la cadena de decision: fuente de metricas -> politicas
-// -> guardas -> combinador -> log. No dependen del AWS SDK a proposito, para que los
-// tests de secuencia puedan construir snapshots a mano.
+using namespace std;
 
-// Epoch en segundos del INICIO del periodo de CloudWatch al que pertenece el dato.
-// Este es el "ahora" de la logica de decision: los cooldowns y la edad de los datos se
-// miden contra este timestamp, no contra el reloj del sistema (que solo aparece en el
-// campo wall_time del log y como parametro para detectar datos viejos).
-using DataTs = std::int64_t;
+// Tipos que usa toda la cadena de decision fuente -> politicas -> guardas -> combinador
+// -> log Asi no se depende del AWS SDK apra pruebes locales
+using DataTs = int64_t;
 
 enum class DataQuality { COMPLETE, INCOMPLETE };
-
-// Señal que emite cada politica (reactiva y proactiva) por separado.
 enum class Signal { UP, DOWN, HOLD };
 
 enum class Decision { MAINTAIN_CAPACITY, INCREASE_CAPACITY, REDUCE_CAPACITY };
-
-// Que politica origino la decision, para el campo trigger del log.
 enum class Trigger { NONE, REACTIVE, PROACTIVE, BOTH };
 
 // Estado observado en un periodo completo de CloudWatch, mas el estado del ASG leido
@@ -31,22 +23,17 @@ struct MetricSnapshot {
     DataTs dataTs = 0;
     int periodoSegundos = 60;
 
-    std::optional<double> cpu;            // AWS/EC2 CPUUtilization, Average, por ASG
-    std::optional<double> requestCount;   // AWS/ApplicationELB RequestCount, Sum (RPM), por LB
-    std::optional<double> healthyHosts;   // AWS/ApplicationELB HealthyHostCount, Average, por TG
+    optional<double> cpu;            
+    optional<double> requestCount;
+    optional<double> healthyHosts;   
+    optional<int> desired;          
+    optional<int> inService;
+    optional<int> pending;
 
-    std::optional<int> desired;           // DescribeAutoScalingGroups
-    std::optional<int> inService;
-    std::optional<int> pending;
-
-    // Problemas que solo la fuente puede detectar (fallo de la llamada, respuesta
-    // sin datapoints). evaluarCalidad() les añade los que se deducen del contenido.
-    std::vector<std::string> problemas;
+    vector<string> problemas;
 };
 
-// HealthyHostCount es un Average por minuto: en las transiciones llega fraccionario
-// (p. ej. 1.5 cuando una instancia entro a mitad del periodo). Toda guarda que cuente
-// instancias usa este piso, para no asumir capacidad que todavia no esta completa.
+// HealthyHostCount se trata como un average por minuto es usada por loas guards que cuentan las instancias para decidir si se puede bajar
 inline int hostsSanosEnteros(double healthyHosts) {
     if (healthyHosts <= 0.0) return 0;
     return static_cast<int>(healthyHosts);

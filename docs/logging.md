@@ -1,0 +1,13 @@
+# Decision logging
+
+Cada ciclo de decision del controlador, cuando hay un dato nuevo disponible, genera una linea en formato JSON dentro de logs/decisions.jsonl. Esta linea es autocontenida: permite reconstruir por completo que se observo, que se calculo, y por que se tomo la decision, sin necesidad de consultar ningun otro estado del sistema.
+
+## Ejemplo de una linea real
+
+```json
+{"timestamp":"2026-09-26T15:52:05Z","cycle_id":8,"data_ts":1790437860,"period_s":60,"ma_window":3,"cpu":28.049126,"request_count":227.000000,"healthy_hosts":2.000000,"data_quality":"COMPLETE","data_issues":[],"ma_cpu":19.044237,"reactive_signal":"DOWN","holt_level":179.006653,"holt_trend":26.756279,"forecast_rpm":259.275490,"horizon":3,"needed_instances":1,"proactive_signal":"DOWN","spike_guard_applied":false,"desired":2,"in_service":2,"pending":0,"guards":[{"name":"datos_completos","passed":true,"detail":"dato COMPLETE","warning":false},{"name":"hosts_sanos_medidos","passed":true,"detail":"n medido con HealthyHostCount","warning":false},{"name":"limite_minimo","passed":true,"detail":"n 2 > MIN 1","warning":false},{"name":"cooldown_bajada","passed":true,"detail":"420 s desde la ultima accion, se exigen 240 s","warning":false},{"name":"chequeo_n1_cpu","passed":true,"detail":"CPU proyectada con 1 instancias = 38.09 %, umbral 60.00 %","warning":false},{"name":"chequeo_n1_pronostico","passed":true,"detail":"pronostico por instancia con 1 = 259.28 RPM, capacidad 300.00 RPM","warning":false}],"blocked_by":null,"decision":"REDUCE_CAPACITY","trigger":"BOTH","justification":"MA_CPU 19.04 < UMBRAL_BAJO 30.00 y pronostico 259.28 RPM exige solo 1 instancias (actual 2); baja a 1","action_requested":"SetDesiredCapacity 2->1","action_result":"OK"}
+```
+
+## Como leer este ejemplo
+
+En este ciclo, la CPU promedio de las tres ultimas muestras (19.04%) esta por debajo del umbral bajo (30%), y el pronostico de demanda (259.28 RPM) solo justifica 1 instancia frente a las 2 actuales. Ambas señales coinciden en reducir capacidad (trigger BOTH), y las seis condiciones de seguridad evaluadas para la reduccion pasan: los datos estan completos, el conteo de instancias sanas es un dato real (no estimado), no se esta en el minimo, paso suficiente tiempo desde la ultima accion, y la proyeccion de CPU y de demanda por instancia con una instancia menos siguen siendo seguras. El controlador ejecuta la reduccion de 2 a 1 instancias y la llamada a AWS resulta exitosa.
