@@ -8,13 +8,14 @@ Controlador de autoescalado horizontal en C++ para ejecutarse como un proceso co
 
 1. [Requisitos previos](#requisitos-previos)
 2. [Quick start: compilar y ejecutar](#quick-start-compilar-y-ejecutar)
-3. [Estructura del repositorio](#estructura-del-repositorio)
-4. [Configuración](#configuración)
-5. [Cómo decide el controller](#cómo-decide-el-controller)
-6. [Métricas de CloudWatch](#métricas-de-cloudwatch)
-7. [Cómo leer el log de decisiones](#cómo-leer-el-log-de-decisiones)
-8. [Documentación adicional](#documentación-adicional)
-9. [Diagramas de arquitectura](#diagramas-de-arquitectura)
+3. [Configuración](#configuración)
+4. [Cómo decide el controller](#cómo-decide-el-controller)
+5. [Métricas de CloudWatch](#métricas-de-cloudwatch)
+6. [Documentación adicional](#documentación-adicional)
+7. [Resultados](#resultados)
+8. [Diagramas de arquitectura](#diagramas-de-arquitectura)
+9. [Construcción de la AMI](#construcción-de-la-ami)
+10. [Referencias](#referencias)
 
 ---
 
@@ -92,9 +93,9 @@ El controller entra en un bucle infinito: cada 30 segundos consulta CloudWatch, 
 
 ## Configuración
 
-Todas las variables están en `config/controller.env.example` (defaults) y se cargan de `config/controller.env` (que NO se versiona).
+Todas las variables están en `config/controller.env.example` y se cargan de `config/controller.env` 
 
-### Variables obligatorias (sin default)
+### Variables obligatorias 
 
 | Variable | Ejemplo | Significado |
 |---|---|---|
@@ -157,13 +158,40 @@ Anticipa la **carga futura esperada**. Usa Holt (double exponential smoothing) p
 
 ## Documentación adicional
 
+### Guías
+
+- [Infraestructura AWS](docs/infraestrcture.md) — VPC, subredes, security groups, ALB, ASG con valores reales
+- [Deployment y ejecución](docs/deployment.md) — guía paso 
+- [Generación de carga](docs/load-testing.md) — el comando real de `scripts/k6-escenario.sh` y las 7 fases de `loadtest/scenarios/escenario_completo.csv`
+- [Decision logging](docs/logging.md) — formato del log de decisiones y un ejemplo real
+
 ### Dentro del repo
 
-- **`infra/app/app.py`**: App Flask que corre en las instancias del ASG (genera carga y health endpoint)
+- **`infra/app/app.py`**: App Flask que corre en las instancias del ASG 
 - **`infra/app/app.service`**: Systemd para la app
 - **`infra/controller.service`**: Systemd para el controller
-- **`docs/iam-policy-controller.json`**: Política IAM recomendada (reemplazar REGION/ACCOUNT_ID)
+- **`docs/iam-policy-controller.json`** / **`docs/iam-policy-controller.md`**: Política IAM recomendada 
 - **`loadtest/scenarios/escenario_completo.csv`**: Perfil de carga: 7 fases (base, pico, recuperación, rampa, meseta, bajada, reposo)
+
+---
+
+## Resultados
+
+Cada corrida de `scripts/k6-escenario.sh` deja su carpeta en `results/k6-escenario/<fecha UTC>/`
+(ver [Generación de carga](docs/load-testing.md)). Dentro de cada carpeta, `timeline.png` es la
+gráfica de 4 paneles generada por `scripts/plot_timeline.py` a partir de `timeline.csv`: demanda
+vs. capacidad, decisiones tomadas, CPU y p90 de latencia, con franjas de fondo por fase.
+
+Corridas versionadas en el repo:
+
+| Corrida | Gráfica |
+|---|---|
+| `20260926T154709Z` | [results/k6-escenario/20260926T154709Z/timeline.png](results/k6-escenario/20260926T154709Z/timeline.png) |
+| `20260926T173635Z` | [results/k6-escenario/20260926T173635Z/timeline.png](results/k6-escenario/20260926T173635Z/timeline.png) |
+
+Nota: estas 2 corridas usaron el perfil de debug `test_probar_reactivo.csv` (~8 min cada una),
+no el escenario completo de 7 fases (~53 min). Sirven para validar el pipeline de resultados;
+la corrida del escenario completo contra AWS real queda pendiente.
 
 ---
 
@@ -179,11 +207,11 @@ flowchart TB
     D --> E["5. Actuar y registrar<br>SetDesiredCapacity + log"]
     E -. 60 segundos después .-> A
 
-    style A fill:#e7f1ff,stroke:#4a90d9
-    style B fill:#e7f1ff,stroke:#4a90d9
-    style C fill:#e8e0ff,stroke:#6b4fd6
-    style D fill:#e8e0ff,stroke:#6b4fd6
-    style E fill:#d4edda,stroke:#28a745
+    style A fill:#e7f1ff,stroke:#4a90d9,color:#000000
+    style B fill:#e7f1ff,stroke:#4a90d9,color:#000000
+    style C fill:#e8e0ff,stroke:#6b4fd6,color:#000000
+    style D fill:#e8e0ff,stroke:#6b4fd6,color:#000000
+    style E fill:#d4edda,stroke:#28a745,color:#000000
 ```
 
 ### Señal Reactiva
@@ -204,11 +232,11 @@ flowchart TD
     R5 -->|Sí| RDOWN[" DOWN<br/>La CPU está muy baja<br/>Se puede quitar instancias"]
     R5 -->|No| RHOLD["HOLD<br/>La CPU está en zona segura<br/>Mantener capacidad"]
 
-    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
-    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
-    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
-    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px
-    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px
+    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px,color:#000000
+    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px,color:#000000
+    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#000000
+    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px,color:#000000
+    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px,color:#000000
 
     class R0 metric
     class R1,R3 calc
@@ -243,11 +271,11 @@ flowchart TB
      PHOLD1:::hold
      PDOWN:::down
      PHOLD2:::hold
-    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
-    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px
-    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
-    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px
-    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px
+    classDef metric fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px,color:#000000
+    classDef calc fill:#eee8ff,stroke:#6b4fd6,stroke-width:1px,color:#000000
+    classDef up fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#000000
+    classDef down fill:#ffebee,stroke:#e53935,stroke-width:2px,color:#000000
+    classDef hold fill:#f5f5f5,stroke:#888,stroke-width:1px,color:#000000
 ```
 
 ### Combinación de señales y safetyguards
@@ -266,14 +294,14 @@ flowchart TB
     G2R -- No --> WAIT2["`**HOLD** Se mantiene igual<br>Motivo guardado en log`"]
     Q2 -- No --> WAIT3["`**HOLD** Se mantiene igual<br>Señales no de acuerdo`"]
 
-    style START fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px
-    style G1 fill:#e8f5e9,stroke:#4caf50
-    style UP fill:#d4edda,stroke:#28a745,stroke-width:2px
-    style WAIT1 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
-    style G2 fill:#ffebee,stroke:#e53935
-    style DOWN fill:#d4edda,stroke:#28a745,stroke-width:2px
-    style WAIT2 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
-    style WAIT3 fill:#fff3cd,stroke:#ffc107,stroke-width:1px
+    style START fill:#e7f1ff,stroke:#4a90d9,stroke-width:2px,color:#000000
+    style G1 fill:#e8f5e9,stroke:#4caf50,color:#000000
+    style UP fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000000
+    style WAIT1 fill:#fff3cd,stroke:#ffc107,stroke-width:1px,color:#000000
+    style G2 fill:#ffebee,stroke:#e53935,color:#000000
+    style DOWN fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000000
+    style WAIT2 fill:#fff3cd,stroke:#ffc107,stroke-width:1px,color:#000000
+    style WAIT3 fill:#fff3cd,stroke:#ffc107,stroke-width:1px,color:#000000
 ```
 
 ---
@@ -316,3 +344,9 @@ La app de las instancias del ASG se crea una sola vez en una **AMI propia** (`am
    ```
 
 ---
+
+## Referencias
+
+Al-Dhuraibi, Y., Paraiso, F., Djarallah, N., & Merle, P. (2018). Elasticity in Cloud
+Computing: State of the Art and Research Challenges. *IEEE Transactions on Services
+Computing*, 11(2), 430-447.
